@@ -1,6 +1,6 @@
 from sqlmodel import Field, UniqueConstraint
 
-from .base_model import MyBaseModel
+from src.shared.models.base_model import MyBaseModel
 
 
 class User(MyBaseModel, table=True):

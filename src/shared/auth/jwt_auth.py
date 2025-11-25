@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import jwt  # PyJWT
 
-from shared.config.env_config import env_settings
+from src.shared.config.env_config import env_settings
 
 
 def _create_token(

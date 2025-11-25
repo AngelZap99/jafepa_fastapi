@@ -1,19 +1,19 @@
 # src/modules/users/users_router.py
 from fastapi import APIRouter, Depends, status
 
-from shared.database.dependencies import SessionDep
+from src.shared.database.dependencies import SessionDep
 
-from shared.models.user.user_model import User
-from .users_dto import (
+from src.shared.models.user.user_model import User
+from src.modules.users.users_dto import (
     UserCreate,
     UserCreateAdmin,
     UserUpdate,
     UserResponse,
 )
-from .domain.users_service import UserService
-from .domain.users_repository import UserRepository
+from src.modules.users.domain.users_service import UserService
+from src.modules.users.domain.users_repository import UserRepository
 
-from modules.auth.auth_dependencies import get_current_user
+from src.modules.auth.auth_dependencies import get_current_user
 
 # TODO: Implement authentication and authorization
 
@@ -101,7 +101,7 @@ def update_user(
 @router.delete(
     "/delete/{user_id}",
     response_model=UserResponse,
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=status.HTTP_200_OK,
 )
 def delete_user(
     user_id: int,

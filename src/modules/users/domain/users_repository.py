@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from sqlmodel import Session, select
 
-from shared.models.user.user_model import User
+from src.shared.models.user.user_model import User
 
 
 class UserRepository:

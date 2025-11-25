@@ -2,6 +2,10 @@ import os
 from fastapi import HTTPException
 from sqlmodel import create_engine
 from sqlalchemy.engine import URL
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Environment variables - Default to development
 PY_ENV = os.getenv("PYENV", "development")
@@ -28,10 +32,8 @@ required_vars = {
 
 missing_vars = [key for key, value in required_vars.items() if value is None]
 if missing_vars:
-    raise HTTPException(
-        status_code=500,
-        detail=f"Missing environment variables: {', '.join(missing_vars)}",
-    )
+    raise RuntimeError(f"Missing environment variables: {', '.join(missing_vars)}")
+
 
 # Build database URL (hides password in repr)
 DATABASE_URL = URL.create(
@@ -51,4 +53,3 @@ engine = create_engine(
     pool_size=10,  # Number of connections to maintain
     max_overflow=20,  # Max connections beyond pool_size
 )
-

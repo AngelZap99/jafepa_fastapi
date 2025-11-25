@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
-from modules.users.mixins.password_validation_mixin import PasswordValidationMixin
+from src.modules.users.users_mixins import PasswordValidationMixin
 
 
 ##### BASE

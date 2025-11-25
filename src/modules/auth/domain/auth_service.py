@@ -11,7 +11,7 @@ from src.shared.auth.jwt_auth import (
 from src.modules.auth.auth_dto import LoginRequest, TokenPairResponse
 
 from src.modules.users.domain.users_repository import UserRepository
-from shared.models.user.user_model import User
+from src.shared.models.user.user_model import User
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
