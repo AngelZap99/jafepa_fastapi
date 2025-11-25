@@ -1,0 +1,85 @@
+from fastapi import APIRouter, Depends, status, HTTPException
+
+from shared.database.dependencies import SessionDep
+from .users_dto import (
+    UserCreate,
+    UserCreateAdmin,
+    UserUpdate,
+    UserResponse,
+)
+from .domain.users_service import UserService
+from .domain.users_repository import UserRepository
+
+# TODO: Implement authentication and authorization
+
+router = APIRouter(
+    prefix="/users",
+    tags=["users"],
+)
+
+
+def get_user_service(session: SessionDep) -> UserService:
+    user_repository = UserRepository(session)
+    return UserService(user_repository)
+
+
+@router.get("/list", response_model=list[UserResponse], status_code=status.HTTP_200_OK)
+def get_users(
+    user_service: UserService = Depends(get_user_service),
+):  # TODO: Implement pagination and optional search with filters
+    return user_service.list_users()
+
+
+@router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def get_user_me():  # TODO: add a method to get the user from the token
+    # TODO: implement the service and repository
+    raise HTTPException(status_code=501, detail="Not implemented yet")
+
+
+@router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
+def get_user(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service),
+):
+    return user_service.get_user(user_id)
+
+
+@router.post(
+    "/createUser", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
+def create_user(
+    payload: UserCreate,
+    user_service: UserService = Depends(get_user_service),
+):
+    return user_service.create_user(payload)
+
+
+@router.post(
+    "/createAdmin", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
+def create_admin(
+    payload: UserCreateAdmin,
+    user_service: UserService = Depends(get_user_service),
+):
+    return user_service.create_user(payload)
+
+
+@router.put(
+    "/update/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK
+)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    user_service: UserService = Depends(get_user_service),
+):
+    return user_service.update_user(user_id, payload)
+
+
+@router.delete(
+    "/delete/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK
+)
+def delete_user(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service),
+):
+    return user_service.delete_user(user_id)
