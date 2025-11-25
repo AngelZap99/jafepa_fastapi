@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+# src/modules/users/users_router.py
+from fastapi import APIRouter, Depends, status
 
 from shared.database.dependencies import SessionDep
+
+from shared.models.user.user_model import User
 from .users_dto import (
     UserCreate,
     UserCreateAdmin,
@@ -10,11 +13,14 @@ from .users_dto import (
 from .domain.users_service import UserService
 from .domain.users_repository import UserRepository
 
+from modules.auth.auth_dependencies import get_current_user
+
 # TODO: Implement authentication and authorization
 
 router = APIRouter(
     prefix="/users",
     tags=["users"],
+    dependencies=[Depends(get_current_user)],
 )
 
 
@@ -23,20 +29,31 @@ def get_user_service(session: SessionDep) -> UserService:
     return UserService(user_repository)
 
 
-@router.get("/list", response_model=list[UserResponse], status_code=status.HTTP_200_OK)
+@router.get(
+    "/list",
+    response_model=list[UserResponse],
+    status_code=status.HTTP_200_OK,
+)
 def get_users(
     user_service: UserService = Depends(get_user_service),
 ):  # TODO: Implement pagination and optional search with filters
     return user_service.list_users()
 
 
-@router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
-def get_user_me():  # TODO: add a method to get the user from the token
-    # TODO: implement the service and repository
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_user_me(current_user: User = Depends(get_current_user)):
+    return current_user
 
 
-@router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
+@router.get(
+    "/{user_id}",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+)
 def get_user(
     user_id: int,
     user_service: UserService = Depends(get_user_service),
@@ -45,7 +62,9 @@ def get_user(
 
 
 @router.post(
-    "/createUser", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/createUser",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 def create_user(
     payload: UserCreate,
@@ -55,7 +74,9 @@ def create_user(
 
 
 @router.post(
-    "/createAdmin", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/createAdmin",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 def create_admin(
     payload: UserCreateAdmin,
@@ -65,7 +86,9 @@ def create_admin(
 
 
 @router.put(
-    "/update/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK
+    "/update/{user_id}",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
 )
 def update_user(
     user_id: int,
@@ -76,7 +99,9 @@ def update_user(
 
 
 @router.delete(
-    "/delete/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK
+    "/delete/{user_id}",
+    response_model=UserResponse,
+    status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_user(
     user_id: int,

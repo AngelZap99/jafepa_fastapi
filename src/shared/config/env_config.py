@@ -1,3 +1,5 @@
+# src/shared/config/env_config.py
+
 import os
 from typing import Optional
 from dotenv import load_dotenv
@@ -14,7 +16,6 @@ class EnvSettings:
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "7"))
     JWT_ENCRYPTION_KEY: str = os.getenv("JWT_ENCRYPTION_KEY", "")
-    MAX_ACTIVE_SESSIONS: int = int(os.getenv("MAX_ACTIVE_SESSIONS", "2"))
 
     @classmethod
     def get_encryption_key(cls) -> Optional[bytes]:
@@ -31,6 +32,3 @@ class EnvSettings:
 
 
 env_settings = EnvSettings()
-
-
-__all__ = ["env_settings", "EnvSettings"]
