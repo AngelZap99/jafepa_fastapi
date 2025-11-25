@@ -17,6 +17,29 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    networks:
+      - jafepa_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jafepa_api
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    restart: always
+    networks:
+      - jafepa_net
 
 volumes:
   postgres_data:
+
+networks:
+  jafepa_net:
+    driver: bridge
