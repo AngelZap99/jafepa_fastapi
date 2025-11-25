@@ -52,5 +52,3 @@ engine = create_engine(
     max_overflow=20,  # Max connections beyond pool_size
 )
 
-
-__all__ = ["engine"]

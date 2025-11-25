@@ -32,5 +32,3 @@ class MyBaseModel(SQLModel):
         default=None, nullable=True, foreign_key="users.id"
     )
 
-
-__all__ = ["MyBaseModel"]

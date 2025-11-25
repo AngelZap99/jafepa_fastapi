@@ -19,6 +19,3 @@ class User(MyBaseModel, table=True):
     is_active: bool = Field(default=True)
     is_verified: bool = Field(default=False)
     is_admin: bool = Field(default=False)
-
-
-__all__ = ["User"]

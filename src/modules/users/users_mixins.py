@@ -23,5 +23,3 @@ class PasswordValidationMixin(BaseModel):
 
         return value
 
-
-__all__ = ["PasswordValidationMixin"]
