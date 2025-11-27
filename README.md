@@ -119,7 +119,10 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ```bash
 # Launch services defined in docker-compose.yml (e.g., PostgreSQL)
-docker-compose up -d
+# build postgres service
+docker-compose up -d --build postgres 
+# build api service
+docker-compose up -d --build api
 
 # Stop services
 docker-compose down
