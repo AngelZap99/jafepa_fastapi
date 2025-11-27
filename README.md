@@ -61,7 +61,7 @@ JAFEPA-backend/
 
 ## 4. Prerequisites
 
-- **Python** 3.12 or higher
+- **Python** 3.13 or higher
 - **PostgreSQL** 14+
 - **pip** / **virtualenv** for dependency management
 - **Docker & Docker Compose** (optional, for containerized setup)
