@@ -15,9 +15,6 @@ class BrandCreate(BrandBase):
 class BrandUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
 
-class BrandUpdateStatus(BaseModel):
-    is_active: bool
-
 ##### OUTPUTS
 class BrandResponse(BrandBase):
     model_config = ConfigDict(from_attributes=True)
