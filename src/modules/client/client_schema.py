@@ -35,11 +35,6 @@ class ClientUpdate(BaseModel):
             return value
         return str(value).strip().lower()
 
-
-class ClientUpdateStatus(BaseModel):
-    is_active: bool
-
-
 ##### OUTPUTS
 class ClientResponse(ClientBase):
     model_config = ConfigDict(from_attributes=True)
