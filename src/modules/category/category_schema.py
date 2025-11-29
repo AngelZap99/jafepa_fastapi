@@ -11,7 +11,6 @@ class CategoryBase(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
     parent_id: Optional[int] = None
 
-
 ##### INPUTS
 class CategoryCreate(CategoryBase):
     pass
