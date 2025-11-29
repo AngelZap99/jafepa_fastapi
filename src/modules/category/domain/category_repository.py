@@ -22,12 +22,8 @@ class CategoryRepository:
         )
 
     def list(self, skip: int = 0, limit: int = 100) -> list[Category]:
-        """
-        Retorna categorías activas
-        """
         return (
             self.db.query(Category)
-            .filter(Category.is_active == True)
             .offset(skip)
             .limit(limit)
             .all()
