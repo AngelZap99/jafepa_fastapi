@@ -28,12 +28,5 @@ class Product(MyBaseModel, table=True):
     # Imagen (int)
     image: Optional[int] = Field(default=None)
 
-    # Timestamps
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column_kwargs={"server_default": func.now()}
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        sa_column_kwargs={"server_default": func.now(), "onupdate": func.now()}
-    )
+    is_active: bool = Field(default=True)
+

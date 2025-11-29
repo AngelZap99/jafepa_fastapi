@@ -2,8 +2,8 @@ from typing import List
 from fastapi import HTTPException, status
 
 from src.shared.models.product.product_model import Product
-from src.modules.products.product_schema import ProductCreate, ProductUpdate
-from src.modules.products.domain.product_repository import ProductRepository
+from src.modules.product.product_schema import ProductCreate, ProductUpdate
+from src.modules.product.domain.product_repository import ProductRepository
 
 
 class ProductService:

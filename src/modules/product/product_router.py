@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, status
 
 from src.shared.database.dependencies import SessionDep
 
-from src.modules.products.product_schema import (
+from src.modules.product.product_schema import (
     ProductCreate,
     ProductUpdate,
     ProductResponse,
 )
-from src.modules.products.domain.product_service import ProductService
-from src.modules.products.domain.product_repository import ProductRepository
+from src.modules.product.domain.product_service import ProductService
+from src.modules.product.domain.product_repository import ProductRepository
 
 from src.modules.auth.auth_dependencies import get_current_user
 
