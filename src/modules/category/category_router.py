@@ -21,7 +21,6 @@ router = APIRouter(
     dependencies=[Depends(get_current_user)],
 )
 
-
 def get_category_service(session: SessionDep) -> CategoryService:
     category_repository = CategoryRepository(session)
     return CategoryService(category_repository)

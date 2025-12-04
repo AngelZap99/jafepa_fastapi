@@ -1,5 +1,3 @@
-# src/modules/warehouse/warehouse_schemas.py
-
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,10 +17,6 @@ class WarehouseCreate(WarehouseBase):
 class WarehouseUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
     address: Optional[str] = Field(default=None, min_length=5, max_length=250)
-
-
-class WarehouseUpdateStatus(BaseModel):
-    is_active: bool
 
 
 ##### OUTPUTS

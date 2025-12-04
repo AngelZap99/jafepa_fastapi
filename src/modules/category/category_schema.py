@@ -11,21 +11,14 @@ class CategoryBase(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
     parent_id: Optional[int] = None
 
-
 ##### INPUTS
 class CategoryCreate(CategoryBase):
     pass
-
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
     description: Optional[str] = Field(default=None, max_length=500)
     parent_id: Optional[int] = None
-
-
-class CategoryUpdateStatus(BaseModel):
-    is_active: bool
-
 
 ##### OUTPUTS
 class CategoryResponse(CategoryBase):

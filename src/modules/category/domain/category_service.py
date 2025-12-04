@@ -10,7 +10,6 @@ from src.modules.category.category_schema import (
 )
 from src.modules.category.domain.category_repository import CategoryRepository
 
-
 class CategoryService:
     ####################
     # Private methods
