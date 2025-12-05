@@ -9,4 +9,5 @@ class Brand(MyBaseModel, table=True):
     __tablename__ = "brand"
 
     name: str = Field(max_length=250, nullable=False, unique=True)
+    
 

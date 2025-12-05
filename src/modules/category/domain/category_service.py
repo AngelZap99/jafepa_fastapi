@@ -9,11 +9,8 @@ from src.modules.category.category_schema import (
     CategoryUpdate,
 )
 from src.modules.category.domain.category_repository import CategoryRepository
-
+import datetime
 class CategoryService:
-    ####################
-    # Private methods
-    ####################
     def __init__(self, repository: CategoryRepository) -> None:
         self.repository = repository
 
@@ -43,11 +40,9 @@ class CategoryService:
                 detail=f"Category '{name}' already exists under this parent.",
             )
 
-    ####################
-    # Public methods
-    ####################
     def list_categories(self, skip: int = 0, limit: int = 100) -> List[Category]:
-        return self.repository.list(skip=skip, limit=limit)
+        all_categorys = self.repository.list(skip=skip, limit=limit)
+        return [category for category in all_categorys if category.deleted_at is None]
 
     def get_category(self, category_id: int) -> Category:
         return self._get_category_or_404(category_id)
@@ -67,7 +62,7 @@ class CategoryService:
     def update_category(self, category_id: int, payload: CategoryUpdate) -> Category:
         category = self._get_category_or_404(category_id)
         data = payload.model_dump(exclude_unset=True)
-
+        print(payload.model_dump())
         # Validar nombre solo si se actualiza
         if "name" in data:
             new_name = data["name"]
@@ -88,4 +83,5 @@ class CategoryService:
     def delete_category(self, category_id: int) -> Category:
         category = self._get_category_or_404(category_id)
         category.is_active = False
+        category.deleted_at = datetime.datetime.utcnow()
         return self.repository.update(category)

@@ -14,6 +14,8 @@ class BrandCreate(BrandBase):
 
 class BrandUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
+    # Permitir actualizar active si se requiere
+    is_active: Optional[bool] = None
 
 ##### OUTPUTS
 class BrandResponse(BrandBase):
@@ -21,3 +23,5 @@ class BrandResponse(BrandBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None  # Fecha de eliminación lógica
+    is_active: bool = True                     # Estado activo/inactivo

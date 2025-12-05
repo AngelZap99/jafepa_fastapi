@@ -1,5 +1,4 @@
 import os
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,8 +13,6 @@ from src.shared.database.dependencies import SessionDep, get_session  # noqa: F4
 # =========================
 # Dependencies
 # =========================
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle: startup and shutdown."""
@@ -47,23 +44,17 @@ app = FastAPI(
 
 
 # =========================
-# Exception handlers
-# =========================
-# TODO: Add an exception global handler
-
-
-# =========================
 # Middlewares
 # =========================
-# Middleware CORS -- Allow just origins in the list
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+# Middleware CORS -- permitir frontend en localhost:5173
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins.split(","),
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # puedes agregar otros si quieres
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # =========================
 # API routers
