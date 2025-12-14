@@ -18,7 +18,7 @@ from src.modules.auth.auth_dependencies import get_current_user
 router = APIRouter(
     prefix="/categories",
     tags=["categories"],
-    dependencies=[Depends(get_current_user)],
+    #dependencies=[Depends(get_current_user)],
 )
 
 def get_category_service(session: SessionDep) -> CategoryService:

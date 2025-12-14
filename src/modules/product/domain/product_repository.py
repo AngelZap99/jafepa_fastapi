@@ -1,6 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from src.shared.models.product.product_model import Product
-
 
 class ProductRepository:
 
@@ -10,6 +9,11 @@ class ProductRepository:
     def list(self, skip=0, limit=100):
         return (
             self.db.query(Product)
+            .options(
+                selectinload(Product.category),
+                selectinload(Product.subcategory),
+                selectinload(Product.brand)
+            )
             .offset(skip)
             .limit(limit)
             .all()
