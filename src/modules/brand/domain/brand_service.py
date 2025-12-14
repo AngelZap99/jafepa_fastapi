@@ -4,18 +4,12 @@ from fastapi import HTTPException, status
 from src.shared.models.brand.brand_model import Brand
 from src.modules.brand.brand_schema import BrandCreate, BrandUpdate
 from src.modules.brand.domain.brand_repository import BrandRepository
-
+import datetime
 
 class BrandService:
-    ####################
-    # Constructor
-    ####################
     def __init__(self, repository: BrandRepository) -> None:
         self.repository = repository
 
-    ####################
-    # Métodos privados
-    ####################
     def _ensure_name_not_taken(
         self, name: str, brand_owner_id: int | None = None
     ) -> None:
@@ -36,11 +30,10 @@ class BrandService:
             )
         return brand
 
-    ####################
-    # Métodos públicos
-    ####################
     def list_brands(self, skip: int = 0, limit: int = 100) -> List[Brand]:
-        return self.repository.list(skip=skip, limit=limit)
+        # Solo marcas activas (deleted_at es None)
+        all_brands = self.repository.list(skip=skip, limit=limit)
+        return [brand for brand in all_brands if brand.deleted_at is None]
 
     def get_brand(self, brand_id: int) -> Brand:
         return self._get_brand_or_404(brand_id)
@@ -50,7 +43,6 @@ class BrandService:
 
         brand = Brand(
             name=payload.name,
-            is_active=True,
         )
 
         return self.repository.add(brand)
@@ -69,5 +61,7 @@ class BrandService:
 
     def delete_brand(self, brand_id: int) -> Brand:
         brand = self._get_brand_or_404(brand_id)
+        brand.deleted_at = datetime.datetime.utcnow()
         brand.is_active = False
+
         return self.repository.update(brand)
