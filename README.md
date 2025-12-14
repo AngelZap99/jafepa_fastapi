@@ -117,15 +117,36 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## 8. Docker Support
 
+### Run local in Dockers
+
 ```bash
 # Launch services defined in docker-compose.yml (e.g., PostgreSQL)
 # build postgres service
-docker-compose up -d --build postgres 
+docker-compose up -d --build postgres
 # build api service
 docker-compose up -d --build api
 
 # Stop services
 docker-compose down
+
+### !Important
+Set .env variable $DB_HOST=postgres
+# this is the docker's name service
+```
+
+### Run local
+
+```bash
+# Launch services defined in docker-compose.yml (e.g., PostgreSQL)
+# build postgres service
+docker-compose up -d --build postgres
+
+# Stop services
+docker-compose down
+
+### !Important
+Set .env variable $DB_HOST=localhost / $DB_HOST=127.0.0.1
+# this is the host of the postgres service
 ```
 
 Update `docker-compose.yml` as additional services are introduced.
@@ -135,8 +156,6 @@ Update `docker-compose.yml` as additional services are introduced.
 - Tables are auto-created at startup via `SQLModel.metadata.create_all(engine)` in `main.py`.
 - For schema changes, modify models in `src/shared/models/` and restart the application.
 - Consider adding Alembic for versioned migrations once the schema grows.
-
-Place tests under a `tests/` directory and add fixtures for SQLModel sessions.
 
 ## 10. Linting & Formatting
 
@@ -160,8 +179,11 @@ Adopt additional tools (`isort`, `mypy`) as required by team standards.
   - `POST /users/create` <- Create user
   - `POST /users/create-admin` <- Create admin
   - `PATCH /users/update/{guid}` <- Update user
-  - `DELETE /users/{guid}` <- Delete user
-- Future modules (e.g., `auth`) should be registered in `src/modules/router.py`.
+  - `DELETE /users/{guid}` <- Delete user.  
+- **Auth module** (`src/modules/auth/auth_router.py`):
+  - `POST /auth/login` <- Login
+  - `POST /auth/register` <- Register
+  - `POST /auth/refresh` <- Refresh token
 
 ## 12. Recommended Workflow
 
