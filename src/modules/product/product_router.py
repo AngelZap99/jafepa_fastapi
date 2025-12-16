@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, File, UploadFile
 
 from src.shared.database.dependencies import SessionDep
 
@@ -53,10 +53,11 @@ def get_product(
     status_code=status.HTTP_201_CREATED,
 )
 def create_product(
-    payload: ProductCreate,
+    payload: ProductCreate = Depends(ProductCreate.as_form),
+    image_file: UploadFile | None = File(None),
     product_service: ProductService = Depends(get_product_service),
 ):
-    return product_service.create_product(payload)
+    return product_service.create_product(payload, image=image_file)
 
 
 @router.put(
@@ -66,10 +67,11 @@ def create_product(
 )
 def update_product(
     product_id: int,
-    payload: ProductUpdate,
+    payload: ProductUpdate = Depends(ProductUpdate.as_form),
+    image_file: UploadFile | None = File(None),
     product_service: ProductService = Depends(get_product_service),
 ):
-    return product_service.update_product(product_id, payload)
+    return product_service.update_product(product_id, payload, image=image_file)
 
 
 @router.delete(

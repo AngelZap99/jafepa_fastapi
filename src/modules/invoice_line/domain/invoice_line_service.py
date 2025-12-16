@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, status
 
-from src.shared.models.invoice.invoice_model import InvoiceLine
+from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
 from src.modules.invoice_line.invoice_line_schema import (
     InvoiceLineCreate,
     InvoiceLineUpdate,

@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session, selectinload
 
-from src.shared.models.invoice.invoice_model import InvoiceLine
+from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
 
 
 class InvoiceLineRepository:

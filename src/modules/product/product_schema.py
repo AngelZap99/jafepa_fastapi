@@ -1,5 +1,7 @@
 from datetime import datetime
 from typing import Optional
+
+from fastapi import Form
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -19,6 +21,7 @@ class ProductBase(BaseModel):
     subcategory_id: Optional[int] = None
     brand_id: int
 
+    # This stays as URL in DB/response. The file upload will be handled in router/service.
     image: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("code", mode="before")
@@ -26,10 +29,50 @@ class ProductBase(BaseModel):
     def normalize_code(cls, value):
         return normalize_product_code(value)
 
+    @classmethod
+    def as_form(
+        cls,
+        name: str = Form(...),
+        code: str = Form(...),
+        description: Optional[str] = Form(None),
+        category_id: int = Form(...),
+        subcategory_id: Optional[int] = Form(None),
+        brand_id: int = Form(...),
+        image: Optional[str] = Form(None),
+    ) -> "ProductBase":
+        return cls(
+            name=name,
+            code=code,
+            description=description,
+            category_id=category_id,
+            subcategory_id=subcategory_id,
+            brand_id=brand_id,
+            image=image,
+        )
+
 
 ##### INPUTS
 class ProductCreate(ProductBase):
-    pass
+    @classmethod
+    def as_form(
+        cls,
+        name: str = Form(...),
+        code: str = Form(...),
+        description: Optional[str] = Form(None),
+        category_id: int = Form(...),
+        subcategory_id: Optional[int] = Form(None),
+        brand_id: int = Form(...),
+        image: Optional[str] = Form(None),
+    ) -> "ProductCreate":
+        return cls(
+            name=name,
+            code=code,
+            description=description,
+            category_id=category_id,
+            subcategory_id=subcategory_id,
+            brand_id=brand_id,
+            image=image,
+        )
 
 
 class ProductUpdate(BaseModel):
@@ -47,6 +90,27 @@ class ProductUpdate(BaseModel):
     @classmethod
     def normalize_code(cls, value):
         return normalize_product_code(value)
+
+    @classmethod
+    def as_form(
+        cls,
+        name: Optional[str] = Form(None),
+        code: Optional[str] = Form(None),
+        description: Optional[str] = Form(None),
+        category_id: Optional[int] = Form(None),
+        subcategory_id: Optional[int] = Form(None),
+        brand_id: Optional[int] = Form(None),
+        image: Optional[str] = Form(None),
+    ) -> "ProductUpdate":
+        return cls(
+            name=name,
+            code=code,
+            description=description,
+            category_id=category_id,
+            subcategory_id=subcategory_id,
+            brand_id=brand_id,
+            image=image,
+        )
 
 
 class ProductUpdateStatus(BaseModel):

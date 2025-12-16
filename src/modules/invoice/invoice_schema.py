@@ -10,6 +10,8 @@ from src.shared.models.invoice.invoice_model import InvoiceStatus
 from src.modules.invoice_line.invoice_line_schema import (
     InvoiceLineCreate,
     InvoiceLineResponse,
+)
+from src.shared.schemas.common_responses import (
     WarehouseLineResponse,
 )
 

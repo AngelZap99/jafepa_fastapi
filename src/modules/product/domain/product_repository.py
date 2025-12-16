@@ -20,9 +20,19 @@ class ProductRepository:
         )
 
     def get(self, product_id: int) -> Product | None:
-        return self.db.query(Product).filter(Product.id == product_id).first()
+        return (
+            self.db.query(Product)
+            .options(
+                selectinload(Product.category),
+                selectinload(Product.subcategory),
+                selectinload(Product.brand),
+            )
+            .filter(Product.id == product_id)
+            .first()
+        )
 
     def get_by_code(self, code: str) -> Product | None:
+        code = str(code).strip().upper()
         return self.db.query(Product).filter(Product.code == code).first()
 
     def add(self, product: Product) -> Product:
