@@ -55,10 +55,12 @@ class ProductUpdateStatus(BaseModel):
 class CategoryResponse(BaseModel):
     id: int
     name: str
+    model_config = ConfigDict(from_attributes=True)
 
 class BrandResponse(BaseModel):
     id: int
     name: str
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProductResponse(ProductBase):

@@ -1,9 +1,10 @@
 # src/shared/models/product/product_model.py
 from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional
+from typing import Optional,List
 from src.shared.models.base_model import MyBaseModel
 from src.shared.models.category.category_model import Category
 from src.shared.models.brand.brand_model import Brand
+from src.shared.models.inventory.inventory_model import Inventory
 
 class Product(MyBaseModel, table=True):
     __tablename__ = "product"
@@ -19,6 +20,7 @@ class Product(MyBaseModel, table=True):
     image: Optional[str] = Field(default=None, max_length=500)
 
     category: Optional[Category] = Relationship(
+        back_populates="products",
         sa_relationship_kwargs={
             "lazy": "joined",
             "foreign_keys": "[Product.category_id]"
@@ -26,6 +28,7 @@ class Product(MyBaseModel, table=True):
     )
 
     subcategory: Optional[Category] = Relationship(
+        back_populates="sub_products",
         sa_relationship_kwargs={
             "lazy": "joined",
             "foreign_keys": "[Product.subcategory_id]"
@@ -33,5 +36,9 @@ class Product(MyBaseModel, table=True):
     )
 
     brand: Optional[Brand] = Relationship(
+        back_populates="products",
         sa_relationship_kwargs={"lazy": "joined"}
     )
+
+    inventory: List[Inventory] = Relationship(back_populates="product")
+
