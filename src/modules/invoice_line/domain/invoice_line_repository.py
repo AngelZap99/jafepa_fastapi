@@ -1,0 +1,68 @@
+from __future__ import annotations
+
+from typing import List, Optional
+
+from sqlalchemy.orm import Session, selectinload
+
+from src.shared.models.invoice.invoice_model import InvoiceLine
+
+
+class InvoiceLineRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def list_by_invoice(
+        self,
+        invoice_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        include_inactive: bool = False,
+    ) -> List[InvoiceLine]:
+        q = (
+            self.db.query(InvoiceLine)
+            .options(selectinload(InvoiceLine.product))
+            .filter(InvoiceLine.invoice_id == invoice_id)
+            .order_by(InvoiceLine.id)
+        )
+
+        if not include_inactive:
+            q = q.filter(InvoiceLine.is_active == True)  # noqa: E712
+
+        return q.offset(skip).limit(limit).all()
+
+    def get(
+        self,
+        invoice_id: int,
+        line_id: int,
+        include_inactive: bool = False,
+    ) -> Optional[InvoiceLine]:
+        q = (
+            self.db.query(InvoiceLine)
+            .options(selectinload(InvoiceLine.product))
+            .filter(InvoiceLine.id == line_id, InvoiceLine.invoice_id == invoice_id)
+        )
+
+        if not include_inactive:
+            q = q.filter(InvoiceLine.is_active == True)  # noqa: E712
+
+        return q.first()
+
+    def add(self, line: InvoiceLine) -> InvoiceLine:
+        self.db.add(line)
+        self.db.commit()
+        self.db.refresh(line)
+        return line
+
+    def update(self, line: InvoiceLine) -> InvoiceLine:
+        # Ensure the instance is attached to the session
+        self.db.add(line)
+        self.db.commit()
+        self.db.refresh(line)
+        return line
+
+    def soft_delete(self, line: InvoiceLine) -> InvoiceLine:
+        line.is_active = False
+        self.db.add(line)
+        self.db.commit()
+        self.db.refresh(line)
+        return line

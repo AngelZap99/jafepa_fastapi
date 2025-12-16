@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from src.shared.database.dependencies import SessionDep
 
 from src.shared.models.user.user_model import User
-from src.modules.users.users_dto import (
+from src.modules.users.users_schema import (
     UserCreate,
     UserCreateAdmin,
     UserUpdate,
@@ -14,8 +14,6 @@ from src.modules.users.domain.users_service import UserService
 from src.modules.users.domain.users_repository import UserRepository
 
 from src.modules.auth.auth_dependencies import get_current_user
-
-# TODO: Implement authentication and authorization
 
 router = APIRouter(
     prefix="/users",

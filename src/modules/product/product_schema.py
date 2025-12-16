@@ -2,7 +2,14 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+
 ##### BASE
+def normalize_product_code(value):
+    if value is None:
+        return value
+    return str(value).strip().upper()
+
+
 class ProductBase(BaseModel):
     name: str = Field(min_length=2, max_length=250)
     code: str = Field(min_length=1, max_length=100)
@@ -17,14 +24,13 @@ class ProductBase(BaseModel):
     @field_validator("code", mode="before")
     @classmethod
     def normalize_code(cls, value):
-        if value is None:
-            return value
-        return str(value).strip().upper()
+        return normalize_product_code(value)
 
 
 ##### INPUTS
 class ProductCreate(ProductBase):
     pass
+
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
@@ -40,9 +46,7 @@ class ProductUpdate(BaseModel):
     @field_validator("code", mode="before")
     @classmethod
     def normalize_code(cls, value):
-        if value is None:
-            return value
-        return str(value).strip().upper()
+        return normalize_product_code(value)
 
 
 class ProductUpdateStatus(BaseModel):
@@ -50,12 +54,11 @@ class ProductUpdateStatus(BaseModel):
 
 
 ##### OUTPUTS
-
-# Nuevos schemas para relaciones
 class CategoryResponse(BaseModel):
     id: int
     name: str
     model_config = ConfigDict(from_attributes=True)
+
 
 class BrandResponse(BaseModel):
     id: int

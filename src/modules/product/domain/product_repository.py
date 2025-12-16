@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session, selectinload
 from src.shared.models.product.product_model import Product
 
-class ProductRepository:
 
+class ProductRepository:
     def __init__(self, db: Session):
         self.db = db
 
@@ -12,7 +12,7 @@ class ProductRepository:
             .options(
                 selectinload(Product.category),
                 selectinload(Product.subcategory),
-                selectinload(Product.brand)
+                selectinload(Product.brand),
             )
             .offset(skip)
             .limit(limit)
@@ -20,18 +20,10 @@ class ProductRepository:
         )
 
     def get(self, product_id: int) -> Product | None:
-        return (
-            self.db.query(Product)
-            .filter(Product.id == product_id)
-            .first()
-        )
+        return self.db.query(Product).filter(Product.id == product_id).first()
 
     def get_by_code(self, code: str) -> Product | None:
-        return (
-            self.db.query(Product)
-            .filter(Product.code == code)
-            .first()
-        )
+        return self.db.query(Product).filter(Product.code == code).first()
 
     def add(self, product: Product) -> Product:
         self.db.add(product)
@@ -40,6 +32,7 @@ class ProductRepository:
         return product
 
     def update(self, product: Product) -> Product:
+        self.db.add(product)  # Ensure the instance is attached to the session
         self.db.commit()
         self.db.refresh(product)
         return product

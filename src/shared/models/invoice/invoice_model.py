@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+from typing import TYPE_CHECKING, List, Optional
+
+from sqlalchemy import Date, Numeric, UniqueConstraint
+from sqlmodel import Field, Relationship
+
+from src.shared.models.base_model import MyBaseModel
+from src.shared.enums.invoice_enums import InvoiceStatus
+
+if TYPE_CHECKING:
+    from src.shared.models.warehouse.warehouse_model import Warehouse
+    from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
+
+
+class Invoice(MyBaseModel, table=True):
+    __tablename__ = "invoice"
+    __table_args__ = (
+        UniqueConstraint("invoice_number", "sequence", name="uq_invoice_sequence"),
+    )
+
+    invoice_number: str = Field(max_length=50, nullable=False, unique=True, index=True)
+    sequence: int = Field(nullable=False, index=True)
+
+    invoice_date: date = Field(default_factory=date.today, sa_type=Date, nullable=False)
+    order_date: Optional[date] = Field(default=None, sa_type=Date)
+    arrival_date: Optional[date] = Field(default=None, sa_type=Date)
+
+    status: InvoiceStatus = Field(default=InvoiceStatus.DRAFT, nullable=False)
+
+    dollar_exchange_rate: Decimal = Field(
+        default=Decimal("1.000000"),
+        sa_type=Numeric(12, 6),
+        nullable=False,
+    )
+    logistic_tax: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_type=Numeric(12, 2),
+        nullable=False,
+    )
+
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+    warehouse_id: int = Field(foreign_key="warehouse.id", nullable=False, index=True)
+
+    # Relationships (one-sided by default to avoid circular imports between modules)
+    warehouse: Optional["Warehouse"] = Relationship(
+        sa_relationship_kwargs={"lazy": "joined"}
+    )
+
+    lines: List["InvoiceLine"] = Relationship(
+        back_populates="invoice",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "lazy": "selectin",
+            "order_by": "InvoiceLine.id",
+        },
+    )

@@ -4,10 +4,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, text
 
-from src.shared.models import user  # noqa: F401
+from src.shared.models import (
+    user,
+    warehouse,
+    brand,
+    category,
+    product,
+    invoice,
+    invoice_line,
+    client,
+)  # noqa: F401
 from src.modules.router import api_router
 from src.shared.database.database_config import engine
 from src.shared.database.dependencies import SessionDep, get_session  # noqa: F401
+import src.shared.database.session_events  # noqa: F401
 
 
 # =========================
@@ -47,9 +57,13 @@ app = FastAPI(
 # Middlewares
 # =========================
 # Middleware CORS -- permitir frontend en localhost:5173
+raw = os.getenv("CORS_ORIGINS", "*")
+allow_origins = (
+    ["*"] if raw.strip() == "*" else [o.strip() for o in raw.split(",") if o.strip()]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174", "http://127.0.0.1:5174"],  # puedes agregar otros si quieres
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

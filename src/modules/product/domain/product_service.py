@@ -7,7 +7,6 @@ from src.modules.product.domain.product_repository import ProductRepository
 
 
 class ProductService:
-
     ####################
     # Private methods
     ####################
@@ -19,7 +18,7 @@ class ProductService:
     ) -> None:
         existing = self.repository.get_by_code(code)
 
-        # Si existe otro producto con ese código → error
+        # if exist another product code equal -> throw error
         if existing and (product_owner_id is None or existing.id != product_owner_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -45,7 +44,7 @@ class ProductService:
         return self._get_product_or_404(product_id)
 
     def create_product(self, payload: ProductCreate) -> Product:
-        # Validar código único
+        # Verify if it has unique code
         self._ensure_code_not_taken(payload.code)
 
         product = Product(
@@ -65,11 +64,11 @@ class ProductService:
         product = self._get_product_or_404(product_id)
         data = payload.model_dump(exclude_unset=True)
 
-        # ¿Se actualiza el código?
+        # Is code updated?
         if "code" in data:
             self._ensure_code_not_taken(data["code"], product_owner_id=product.id)
 
-        # Aplicar los cambios al modelo
+        # Apply changes to product
         for field, value in data.items():
             setattr(product, field, value)
 
@@ -78,5 +77,4 @@ class ProductService:
     def delete_product(self, product_id: int) -> Product:
         product = self._get_product_or_404(product_id)
         product.is_active = False
-        self.repository.update(product)
-        return product
+        return self.repository.update(product)
