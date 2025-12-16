@@ -15,8 +15,6 @@ from src.modules.users.domain.users_repository import UserRepository
 
 from src.modules.auth.auth_dependencies import get_current_user
 
-# TODO: Implement authentication and authorization
-
 router = APIRouter(
     prefix="/users",
     tags=["users"],

@@ -8,6 +8,7 @@ from src.shared.models import user  # noqa: F401
 from src.modules.router import api_router
 from src.shared.database.database_config import engine
 from src.shared.database.dependencies import SessionDep, get_session  # noqa: F401
+import src.shared.database.session_events  # noqa: F401
 
 
 # =========================
