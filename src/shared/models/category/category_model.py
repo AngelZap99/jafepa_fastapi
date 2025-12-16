@@ -1,10 +1,10 @@
 # src/shared/models/category/category_model.py
 
 from typing import Optional
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field,Relationship
 from sqlalchemy.sql import func
 from datetime import datetime
-
+from typing import List
 from src.shared.models.base_model import MyBaseModel
 
 
@@ -15,3 +15,12 @@ class Category(MyBaseModel, table=True):
 
     name: str = Field(max_length=250, nullable=False)
     description: Optional[str] = Field(default=None, max_length=500)
+    products: List["Product"] = Relationship(
+        back_populates="category",
+        sa_relationship_kwargs={"foreign_keys": "[Product.category_id]"}
+    )
+
+    sub_products: List["Product"] = Relationship(
+        back_populates="subcategory",
+        sa_relationship_kwargs={"foreign_keys": "[Product.subcategory_id]"}
+    )
