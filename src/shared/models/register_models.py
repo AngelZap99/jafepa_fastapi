@@ -1,0 +1,9 @@
+from src.shared.models.user.user_model import User # noqa: F401
+from src.shared.models.brand.brand_model import Brand  # noqa: F401
+from src.shared.models.category.category_model import Category  # noqa: F401
+from src.shared.models.client.client_model import Client  # noqa: F401
+from src.shared.models.warehouse.warehouse_model import Warehouse  # noqa: F401
+from src.shared.models.product.product_model import Product  # noqa: F401
+from src.shared.models.invoice.invoice_model import Invoice  # noqa: F401
+from src.shared.models.invoice_line.invoice_line_model import InvoiceLine  # noqa: F401
+from src.shared.models.inventory.inventory_model import Inventory  # noqa: F401

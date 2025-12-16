@@ -1,18 +1,12 @@
-from __future__ import annotations
-
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 
 from sqlalchemy import Date, Numeric, UniqueConstraint
 from sqlmodel import Field, Relationship
 
 from src.shared.models.base_model import MyBaseModel
 from src.shared.enums.invoice_enums import InvoiceStatus
-
-if TYPE_CHECKING:
-    from src.shared.models.warehouse.warehouse_model import Warehouse
-    from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
 
 
 class Invoice(MyBaseModel, table=True):
@@ -31,21 +25,17 @@ class Invoice(MyBaseModel, table=True):
     status: InvoiceStatus = Field(default=InvoiceStatus.DRAFT, nullable=False)
 
     dollar_exchange_rate: Decimal = Field(
-        default=Decimal("1.000000"),
-        sa_type=Numeric(12, 6),
-        nullable=False,
+        default=Decimal("1.000000"), sa_type=Numeric(12, 6), nullable=False
     )
     logistic_tax: Decimal = Field(
-        default=Decimal("0.00"),
-        sa_type=Numeric(12, 2),
-        nullable=False,
+        default=Decimal("0.00"), sa_type=Numeric(12, 2), nullable=False
     )
 
     notes: Optional[str] = Field(default=None, max_length=500)
 
     warehouse_id: int = Field(foreign_key="warehouse.id", nullable=False, index=True)
 
-    # Relationships (one-sided by default to avoid circular imports between modules)
+    # Use forward-ref strings to avoid circular imports
     warehouse: Optional["Warehouse"] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )

@@ -4,16 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, text
 
-from src.shared.models import (
-    user,
-    warehouse,
-    brand,
-    category,
-    product,
-    invoice,
-    invoice_line,
-    client,
-)  # noqa: F401
+import src.shared.models.register_models  # noqa: F401
 from src.modules.router import api_router
 from src.shared.database.database_config import engine
 from src.shared.database.dependencies import SessionDep, get_session  # noqa: F401
