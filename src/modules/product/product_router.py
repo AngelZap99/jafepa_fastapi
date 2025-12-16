@@ -16,7 +16,7 @@ from src.modules.auth.auth_dependencies import get_current_user
 router = APIRouter(
     prefix="/products",
     tags=["products"],
-    # dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_user)],
 )
 
 
@@ -34,7 +34,6 @@ def list_products(
     product_service: ProductService = Depends(get_product_service),
 ):
     return product_service.list_products()
-
 
 @router.get(
     "/{product_id}",
