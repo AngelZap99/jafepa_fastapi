@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from src.shared.database.dependencies import SessionDep
 
 from src.shared.models.user.user_model import User
-from src.modules.users.users_dto import (
+from src.modules.users.users_schema import (
     UserCreate,
     UserCreateAdmin,
     UserUpdate,

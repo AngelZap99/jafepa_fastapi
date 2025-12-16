@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from passlib.context import CryptContext
 
 from src.shared.models.user.user_model import User
-from src.modules.users.users_dto import UserCreate, UserUpdate
+from src.modules.users.users_schema import UserCreate, UserUpdate
 from src.modules.users.domain.users_repository import UserRepository
 
 
