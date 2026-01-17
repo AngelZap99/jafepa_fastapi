@@ -18,6 +18,7 @@ class InvoiceLine(MyBaseModel, table=True):
     total_units: int = Field(nullable=False, gt=0)
 
     price: Decimal = Field(sa_type=Numeric(12, 2), nullable=False)
+    inventory_applied: bool = Field(default=False, nullable=False, index=True)
 
     invoice: Optional["Invoice"] = Relationship(
         back_populates="lines",

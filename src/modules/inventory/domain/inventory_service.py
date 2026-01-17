@@ -2,9 +2,16 @@ from typing import List
 from fastapi import HTTPException, status
 
 from src.shared.models.inventory.inventory_model import Inventory
-from src.modules.inventory.inventory_schema import InventoryCreate, InventoryUpdate
+from src.modules.inventory.inventory_schema import (
+    InventoryCreate,
+    InventoryUpdate,
+    InventoryMovementFilters,
+)
 
 from src.modules.inventory.domain.inventory_repository import InventoryRepository
+from src.modules.inventory.domain.inventory_movement_repository import (
+    InventoryMovementRepository,
+)
 
 from fastapi.responses import FileResponse
 from .pdf_generator import PDFGenerator
@@ -77,3 +84,26 @@ class InventoryService:
         pdf_path = self._pdf_generator.generate_inventory_pdf(items)
 
         return FileResponse(pdf_path, filename="inventory.pdf")
+
+    ####################
+    # Movement history
+    ####################
+    def list_movements(
+        self, filters: InventoryMovementFilters, skip: int = 0, limit: int = 100
+    ):
+        movement_repository = InventoryMovementRepository(self.repository.db)
+        return movement_repository.list(
+            skip=skip,
+            limit=limit,
+            include_inactive=filters.include_inactive,
+            inventory_id=filters.inventory_id,
+            product_id=filters.product_id,
+            warehouse_id=filters.warehouse_id,
+            invoice_id=filters.invoice_id,
+            invoice_line_id=filters.invoice_line_id,
+            source_type=filters.source_type,
+            event_type=filters.event_type,
+            movement_type=filters.movement_type,
+            from_date=filters.from_date,
+            to_date=filters.to_date,
+        )

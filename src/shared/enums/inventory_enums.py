@@ -1,0 +1,18 @@
+from enum import Enum
+
+
+class InventorySourceType(str, Enum):
+    INVOICE = "INVOICE"
+    SALE = "SALE"
+    MANUAL = "MANUAL"
+
+
+class InventoryEventType(str, Enum):
+    INVOICE_RECEIVED = "INVOICE_RECEIVED"
+    INVOICE_UNRECEIVED = "INVOICE_UNRECEIVED"
+    # TODO: Add other type events: SALE_APPROVED, SALE_REJECTED, etc.
+
+
+class InventoryMovementType(str, Enum):
+    IN_ = "IN"  # Stock increases
+    OUT = "OUT"  # Stock decreases

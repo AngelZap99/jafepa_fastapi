@@ -45,15 +45,30 @@ class InventoryRepository:
             .first()
         )
 
-    def add(self, inventory: Inventory) -> Inventory:
+    def get_by_keys(
+        self, warehouse_id: int, product_id: int, box_size: int
+    ) -> Inventory | None:
+        return (
+            self.db.query(Inventory)
+            .filter(
+                Inventory.warehouse_id == warehouse_id,
+                Inventory.product_id == product_id,
+                Inventory.box_size == box_size,
+            )
+            .first()
+        )
+
+    def add(self, inventory: Inventory, commit: bool = True) -> Inventory:
         self.db.add(inventory)
-        self.db.commit()
-        self.db.refresh(inventory)
+        if commit:
+            self.db.commit()
+            self.db.refresh(inventory)
         return inventory
 
-    def update(self, inventory: Inventory) -> Inventory:
-        self.db.commit()
-        self.db.refresh(inventory)
+    def update(self, inventory: Inventory, commit: bool = True) -> Inventory:
+        if commit:
+            self.db.commit()
+            self.db.refresh(inventory)
         return inventory
 
     def delete(self, inventory: Inventory):

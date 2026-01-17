@@ -51,7 +51,7 @@ class ProductService:
         )
         return self.s3.upload_uploadfile(
             image,
-            prefix=f"products/{product_id}",
+            prefix=f"PRODUCT_IMAGES/{product_id}",
             make_public=True,
         )
 
@@ -76,7 +76,7 @@ class ProductService:
             category_id=payload.category_id,
             subcategory_id=payload.subcategory_id,
             brand_id=payload.brand_id,
-            image=payload.image,  # URL si te la mandan
+            image=payload.image,
             is_active=True,
         )
 
