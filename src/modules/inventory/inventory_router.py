@@ -6,6 +6,8 @@ from src.modules.inventory.inventory_schema import (
     InventoryCreate,
     InventoryUpdate,
     InventoryResponse,
+    InventoryMovementFilters,
+    InventoryMovementResponse,
 )
 
 from src.modules.inventory.domain.inventory_service import InventoryService
@@ -35,6 +37,20 @@ def list_inventory(
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
     return inventory_service.list_inventory()
+
+
+@router.get(
+    "/movements",
+    response_model=list[InventoryMovementResponse],
+    status_code=status.HTTP_200_OK,
+)
+def list_inventory_movements(
+    filters: InventoryMovementFilters = Depends(),
+    skip: int = 0,
+    limit: int = 100,
+    inventory_service: InventoryService = Depends(get_inventory_service),
+):
+    return inventory_service.list_movements(filters=filters, skip=skip, limit=limit)
 
 
 @router.get(

@@ -15,7 +15,7 @@ class Invoice(MyBaseModel, table=True):
         UniqueConstraint("invoice_number", "sequence", name="uq_invoice_sequence"),
     )
 
-    invoice_number: str = Field(max_length=50, nullable=False, unique=True, index=True)
+    invoice_number: str = Field(max_length=50, nullable=False)
     sequence: int = Field(nullable=False, index=True)
 
     invoice_date: date = Field(default_factory=date.today, sa_type=Date, nullable=False)

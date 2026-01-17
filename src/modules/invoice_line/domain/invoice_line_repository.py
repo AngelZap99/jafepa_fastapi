@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import List, Optional
 
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.exc import IntegrityError
 
+from src.shared.models.invoice.invoice_model import Invoice
 from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
 
 
@@ -52,6 +54,13 @@ class InvoiceLineRepository:
         self.db.commit()
         self.db.refresh(line)
         return line
+
+    def get_invoice(self, invoice_id: int) -> Optional[Invoice]:
+        return (
+            self.db.query(Invoice)
+            .filter(Invoice.id == invoice_id, Invoice.is_active == True)  # noqa: E712
+            .first()
+        )
 
     def update(self, line: InvoiceLine) -> InvoiceLine:
         # Ensure the instance is attached to the session

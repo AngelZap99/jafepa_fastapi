@@ -7,3 +7,6 @@ from src.shared.models.product.product_model import Product  # noqa: F401
 from src.shared.models.invoice.invoice_model import Invoice  # noqa: F401
 from src.shared.models.invoice_line.invoice_line_model import InvoiceLine  # noqa: F401
 from src.shared.models.inventory.inventory_model import Inventory  # noqa: F401
+from src.shared.models.inventory_movement.inventory_movement_model import (
+    InventoryMovement,  # noqa: F401
+)

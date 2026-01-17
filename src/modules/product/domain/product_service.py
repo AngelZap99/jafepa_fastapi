@@ -37,7 +37,7 @@ class ProductService:
         )
         return self.s3.upload_uploadfile(
             image,
-            prefix=f"products/{product_id}",
+            prefix=f"PRODUCT_IMAGES/{product_id}",
             make_public=True,
         )
 

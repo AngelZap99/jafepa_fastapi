@@ -59,13 +59,14 @@ class InvoiceCreateWithLines(InvoiceBase):
 
     @model_validator(mode="after")
     def validate_lines(self):
-        # Allow empty lines, but prevent duplicated product rows if you want a clean invoice.
         if not self.lines:
             return self
 
-        product_ids = [l.product_id for l in self.lines]
-        if len(product_ids) != len(set(product_ids)):
-            raise ValueError("Duplicate product_id in invoice lines is not allowed")
+        keys = [(l.product_id, l.box_size) for l in self.lines]
+        if len(keys) != len(set(keys)):
+            raise ValueError(
+                "Duplicate (product, box_size) in invoice lines is not allowed"
+            )
         return self
 
 
@@ -76,8 +77,6 @@ class InvoiceUpdate(BaseModel):
     invoice_date: Optional[date] = None
     order_date: Optional[date] = None
     arrival_date: Optional[date] = None
-
-    status: Optional[InvoiceStatus] = None
 
     dollar_exchange_rate: Optional[Decimal] = Field(
         default=None, ge=Decimal("0.000001")
