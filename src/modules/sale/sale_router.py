@@ -1,0 +1,155 @@
+from fastapi import APIRouter, Depends, status
+
+from src.shared.database.dependencies import SessionDep
+
+from src.modules.sale.sale_schema import (
+    SaleCreateWithLines,
+    SaleUpdate,
+    SaleUpdateStatus,
+    SaleResponse,
+    SaleLineCreate,
+    SaleLineUpdate,
+    SaleLineResponse,
+    SaleReportFilters,
+    SaleReportResponse,
+)
+from src.modules.sale.domain.sale_service import SaleService
+from src.modules.sale.domain.sale_repository import SaleRepository
+
+
+router = APIRouter(
+    prefix="/sales",
+    tags=["sales"],
+)
+
+
+def get_sale_service(session: SessionDep) -> SaleService:
+    sale_repository = SaleRepository(session)
+    return SaleService(sale_repository)
+
+
+@router.get(
+    "/report",
+    response_model=SaleReportResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_sales_report(
+    filters: SaleReportFilters = Depends(),
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.get_sales_report(filters)
+
+
+@router.get(
+    "/list",
+    response_model=list[SaleResponse],
+    status_code=status.HTTP_200_OK,
+)
+def list_sales(
+    skip: int = 0,
+    limit: int = 100,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.list_sales(skip=skip, limit=limit)
+
+
+@router.get(
+    "/{sale_id}",
+    response_model=SaleResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_sale(
+    sale_id: int,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.get_sale(sale_id)
+
+
+@router.post(
+    "/create",
+    response_model=SaleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_sale(
+    payload: SaleCreateWithLines,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.create_sale(payload)
+
+
+@router.put(
+    "/update/{sale_id}",
+    response_model=SaleResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_sale(
+    sale_id: int,
+    payload: SaleUpdate,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.update_sale(sale_id, payload)
+
+
+@router.put(
+    "/update-status/{sale_id}",
+    response_model=SaleResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_sale_status(
+    sale_id: int,
+    payload: SaleUpdateStatus,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.update_sale_status(sale_id, payload)
+
+
+@router.delete(
+    "/delete/{sale_id}",
+    response_model=SaleResponse,
+    status_code=status.HTTP_200_OK,
+)
+def delete_sale(
+    sale_id: int,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.delete_sale(sale_id)
+
+
+@router.post(
+    "/{sale_id}/lines",
+    response_model=SaleLineResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_sale_line(
+    sale_id: int,
+    payload: SaleLineCreate,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.add_sale_line(sale_id, payload)
+
+
+@router.put(
+    "/{sale_id}/lines/{line_id}",
+    response_model=SaleLineResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_sale_line(
+    sale_id: int,
+    line_id: int,
+    payload: SaleLineUpdate,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.update_sale_line(sale_id, line_id, payload)
+
+
+@router.delete(
+    "/{sale_id}/lines/{line_id}",
+    response_model=SaleLineResponse,
+    status_code=status.HTTP_200_OK,
+)
+def delete_sale_line(
+    sale_id: int,
+    line_id: int,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.delete_sale_line(sale_id, line_id)

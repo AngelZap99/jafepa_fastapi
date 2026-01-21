@@ -10,3 +10,5 @@ from src.shared.models.inventory.inventory_model import Inventory  # noqa: F401
 from src.shared.models.inventory_movement.inventory_movement_model import (
     InventoryMovement,  # noqa: F401
 )
+from src.shared.models.sale.sale_model import Sale  # noqa: F401
+from src.shared.models.sale_line.sale_line_model import SaleLine  # noqa: F401

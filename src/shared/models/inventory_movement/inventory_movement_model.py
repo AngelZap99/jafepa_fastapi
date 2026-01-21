@@ -44,10 +44,16 @@ class InventoryMovement(MyBaseModel, table=True):
     invoice_line_id: Optional[int] = Field(
         default=None, foreign_key="invoice_line.id", index=True
     )
+    sale_line_id: Optional[int] = Field(
+        default=None, foreign_key="sale_line.id", index=True
+    )
 
     inventory: Optional["Inventory"] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )
     invoice_line: Optional["InvoiceLine"] = Relationship(
+        sa_relationship_kwargs={"lazy": "joined"}
+    )
+    sale_line: Optional["SaleLine"] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )
