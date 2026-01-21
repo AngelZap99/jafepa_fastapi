@@ -11,24 +11,10 @@ from src.shared.files.upload_file_s3 import S3FileHandler
 
 
 class ProductService:
-    ####################
-    # Private methods
-    ####################
     def __init__(self, repository: ProductRepository) -> None:
         self.repository = repository
         self.image_validator = ImageValidator()
         self.s3 = S3FileHandler()
-
-    def _ensure_code_not_taken(
-        self, code: str, product_owner_id: int | None = None
-    ) -> None:
-        existing = self.repository.get_by_code(code)
-
-        if existing and (product_owner_id is None or existing.id != product_owner_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Product code {code} is already taken",
-            )
 
     def _get_product_or_404(self, product_id: int) -> Product:
         product = self.repository.get(product_id)
@@ -46,7 +32,7 @@ class ProductService:
             [image],
             max_size_bytes=5 * 1024 * 1024,
             allowed_extensions={".jpg", ".jpeg", ".png", ".webp"},
-            allowed_mime_types={"image/jpeg", "image/png", "image/webp"},
+            allowed_mime_types={"image/jpeg", "image/png", ".webp"},
             require_magic_bytes=True,
         )
         return self.s3.upload_uploadfile(
@@ -55,9 +41,6 @@ class ProductService:
             make_public=True,
         )
 
-    ####################
-    # Public methods
-    ####################
     def list_products(self, skip: int = 0, limit: int = 100) -> List[Product]:
         return self.repository.list(skip=skip, limit=limit)
 
@@ -67,7 +50,13 @@ class ProductService:
     def create_product(
         self, payload: ProductCreate, image: Optional[UploadFile] = None
     ) -> Product:
-        self._ensure_code_not_taken(payload.code)
+        # Verificar conflictos
+        conflicts = self.repository.check_conflicts(payload)
+        if conflicts:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=conflicts,
+            )
 
         product = Product(
             name=payload.name,
@@ -76,7 +65,7 @@ class ProductService:
             category_id=payload.category_id,
             subcategory_id=payload.subcategory_id,
             brand_id=payload.brand_id,
-            image=payload.image,  # URL si te la mandan
+            image=payload.image,
             is_active=True,
         )
 
@@ -104,10 +93,14 @@ class ProductService:
         product = self._get_product_or_404(product_id)
         data = payload.model_dump(exclude_unset=True)
 
-        if "code" in data:
-            self._ensure_code_not_taken(data["code"], product_owner_id=product.id)
+        # Verificar conflictos
+        conflicts = self.repository.check_conflicts(payload, product_id=product.id)
+        if conflicts:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=conflicts,
+            )
 
-        # Apply changes (skip None to avoid wiping fields when using multipart defaults)
         for field, value in data.items():
             if value is not None:
                 setattr(product, field, value)
@@ -127,7 +120,7 @@ class ProductService:
             if old_image:
                 self.s3.delete_file(old_image)
 
-        return product
+        return self.repository.update(product)
 
     def delete_product(self, product_id: int) -> Product:
         product = self._get_product_or_404(product_id)

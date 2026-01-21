@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, text
 
+# Importar modelos y routers
 import src.shared.models.register_models  # noqa: F401
 from src.modules.router import api_router
 from src.shared.database.database_config import engine
@@ -12,7 +16,7 @@ import src.shared.database.session_events  # noqa: F401
 
 
 # =========================
-# Dependencies
+# Lifespan (startup/shutdown)
 # =========================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,11 +25,12 @@ async def lifespan(app: FastAPI):
     db_dialect = os.getenv("DB_DIALECT", "")
     if db_dialect.lower() == "postgresql":
         with engine.begin() as conn:
-            # Create pgcrypto extension for gen_random_uuid()
+            # Crear extensión pgcrypto para gen_random_uuid()
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto;"))
 
-    # Create all tables
+    # Crear todas las tablas
     SQLModel.metadata.create_all(engine)
+
     try:
         yield
     finally:
@@ -34,7 +39,7 @@ async def lifespan(app: FastAPI):
 
 
 # =========================
-# Application
+# Aplicación FastAPI
 # =========================
 app = FastAPI(
     title="Jafepa API",
@@ -45,13 +50,12 @@ app = FastAPI(
 
 
 # =========================
-# Middlewares
+# Middleware CORS
 # =========================
-# Middleware CORS -- permitir frontend en localhost:5173
-raw = os.getenv("CORS_ORIGINS", "*")
-allow_origins = (
-    ["*"] if raw.strip() == "*" else [o.strip() for o in raw.split(",") if o.strip()]
-)
+# Definir origenes permitidos
+# Para desarrollo local
+allow_origins = ["http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
@@ -62,6 +66,17 @@ app.add_middleware(
 
 
 # =========================
-# API routers
+# Routers
 # =========================
 app.include_router(api_router)
+
+
+# =========================
+# Endpoint de prueba CORS (opcional)
+# =========================
+from fastapi import Response
+
+@app.get("/test-cors")
+def test_cors(response: Response):
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:5173"
+    return {"message": "CORS funcionando"}
