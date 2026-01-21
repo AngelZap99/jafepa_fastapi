@@ -10,6 +10,8 @@ class InventorySourceType(str, Enum):
 class InventoryEventType(str, Enum):
     INVOICE_RECEIVED = "INVOICE_RECEIVED"
     INVOICE_UNRECEIVED = "INVOICE_UNRECEIVED"
+    SALE_APPROVED = "SALE_APPROVED"
+    SALE_REVERSED = "SALE_REVERSED"
     # TODO: Add other type events: SALE_APPROVED, SALE_REJECTED, etc.
 
 

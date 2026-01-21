@@ -9,7 +9,12 @@ from src.shared.models.inventory_movement.inventory_movement_model import (
 )
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
-from src.shared.enums.inventory_enums import InventoryMovementType
+from src.shared.models.sale_line.sale_line_model import SaleLine
+from src.shared.enums.inventory_enums import (
+    InventoryEventType,
+    InventoryMovementType,
+    InventorySourceType,
+)
 
 
 class InventoryMovementRepository:
@@ -25,6 +30,14 @@ class InventoryMovementRepository:
             self.db.refresh(movement)
         return movement
 
+    def get_next_sequence(self, movement_group_id: str) -> int:
+        last = (
+            self.db.query(func.max(InventoryMovement.movement_sequence))
+            .filter(InventoryMovement.movement_group_id == movement_group_id)
+            .scalar()
+        )
+        return int(last or 0) + 1
+
     def list(
         self,
         skip: int = 0,
@@ -35,6 +48,8 @@ class InventoryMovementRepository:
         warehouse_id: int | None = None,
         invoice_id: int | None = None,
         invoice_line_id: int | None = None,
+        sale_id: int | None = None,
+        sale_line_id: int | None = None,
         source_type=None,
         event_type=None,
         movement_type=None,
@@ -44,6 +59,7 @@ class InventoryMovementRepository:
         q = self.db.query(InventoryMovement).options(
             selectinload(InventoryMovement.inventory),
             selectinload(InventoryMovement.invoice_line),
+            selectinload(InventoryMovement.sale_line),
         )
 
         if not include_inactive:
@@ -54,6 +70,9 @@ class InventoryMovementRepository:
 
         if invoice_line_id is not None:
             q = q.filter(InventoryMovement.invoice_line_id == invoice_line_id)
+
+        if sale_line_id is not None:
+            q = q.filter(InventoryMovement.sale_line_id == sale_line_id)
 
         if source_type is not None:
             q = q.filter(InventoryMovement.source_type == source_type)
@@ -80,6 +99,9 @@ class InventoryMovementRepository:
         if invoice_id is not None:
             q = q.join(InvoiceLine).filter(InvoiceLine.invoice_id == invoice_id)
 
+        if sale_id is not None:
+            q = q.join(SaleLine).filter(SaleLine.sale_id == sale_id)
+
         return (
             q.order_by(
                 InventoryMovement.movement_date.desc(), InventoryMovement.id.desc()
@@ -105,6 +127,8 @@ class InventoryMovementRepository:
                 InventoryMovement.inventory_id == inventory_id,
                 InventoryMovement.is_active == True,  # noqa: E712
                 InventoryMovement.movement_type == InventoryMovementType.IN_,
+                InventoryMovement.source_type == InventorySourceType.INVOICE,
+                InventoryMovement.event_type == InventoryEventType.INVOICE_RECEIVED,
                 InventoryMovement.movement_date >= since_dt,
             )
             .one()
@@ -118,6 +142,8 @@ class InventoryMovementRepository:
                 InventoryMovement.inventory_id == inventory_id,
                 InventoryMovement.is_active == True,  # noqa: E712
                 InventoryMovement.movement_type == InventoryMovementType.IN_,
+                InventoryMovement.source_type == InventorySourceType.INVOICE,
+                InventoryMovement.event_type == InventoryEventType.INVOICE_RECEIVED,
             )
             .order_by(InventoryMovement.movement_date.desc())
             .first()

@@ -96,6 +96,8 @@ class InventoryMovementFilters(BaseModel):
     warehouse_id: Optional[int] = Field(default=None, gt=0)
     invoice_id: Optional[int] = Field(default=None, gt=0)
     invoice_line_id: Optional[int] = Field(default=None, gt=0)
+    sale_id: Optional[int] = Field(default=None, gt=0)
+    sale_line_id: Optional[int] = Field(default=None, gt=0)
 
     source_type: Optional[InventorySourceType] = None
     event_type: Optional[InventoryEventType] = None
@@ -128,6 +130,17 @@ class InventoryMovementInvoiceLineRef(BaseModel):
     price: Decimal
 
 
+class InventoryMovementSaleLineRef(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sale_id: int
+    inventory_id: int
+    quantity_units: int
+    price: Decimal
+    total_price: Decimal
+
+
 class InventoryMovementResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -144,9 +157,11 @@ class InventoryMovementResponse(BaseModel):
     new_stock: int
     inventory_id: int
     invoice_line_id: Optional[int]
+    sale_line_id: Optional[int]
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
     inventory: Optional[InventoryMovementInventoryRef] = None
     invoice_line: Optional[InventoryMovementInvoiceLineRef] = None
+    sale_line: Optional[InventoryMovementSaleLineRef] = None

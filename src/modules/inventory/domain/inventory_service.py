@@ -101,6 +101,8 @@ class InventoryService:
             warehouse_id=filters.warehouse_id,
             invoice_id=filters.invoice_id,
             invoice_line_id=filters.invoice_line_id,
+            sale_id=filters.sale_id,
+            sale_line_id=filters.sale_line_id,
             source_type=filters.source_type,
             event_type=filters.event_type,
             movement_type=filters.movement_type,
