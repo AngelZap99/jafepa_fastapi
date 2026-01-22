@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, status
-
+from fastapi import APIRouter, Query, Depends, Request, status
+from typing import Optional, List
 from src.shared.database.dependencies import SessionDep
 
 from src.modules.inventory.inventory_schema import (
@@ -17,7 +17,7 @@ from src.modules.auth.auth_dependencies import get_current_user
 router = APIRouter(
     prefix="/inventory",
     tags=["inventory"],
-    dependencies=[Depends(get_current_user)],
+    #dependencies=[Depends(get_current_user)],
 )
 
 
@@ -89,11 +89,28 @@ def delete_inventory(
 # --------------------------
 #      PDF EXPORT
 # --------------------------
+
 @router.get(
     "/pdf/all",
     status_code=status.HTTP_200_OK,
 )
 def generate_all_inventory_pdf(
+    request: Request,
+    categoria: Optional[str] = Query(None, description="Filtra por categoría"),
+    subcategoria: Optional[str] = Query(None, description="Filtra por subcategoría"),
+    marca: Optional[str] = Query(None, description="Filtra por marca"),
+    buscar: Optional[str] = Query(None, description="Buscar por nombre o código"),
+    ids: Optional[List[int]] = Query(None, description="IDs de inventario seleccionados"),
     inventory_service: InventoryService = Depends(get_inventory_service)
 ):
-    return inventory_service.generate_all_inventory_pdf()
+    print("Query raw:", request.query_params)
+    filters = {
+        "categoria": categoria,
+        "subcategoria": subcategoria,
+        "marca": marca,
+        "buscar": buscar,
+        "ids": ids
+    }
+    filters = {k: v for k, v in filters.items() if v is not None}
+    
+    return inventory_service.generate_all_inventory_pdf(filters=filters)

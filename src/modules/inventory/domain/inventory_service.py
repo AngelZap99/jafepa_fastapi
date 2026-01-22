@@ -69,10 +69,10 @@ class InventoryService:
     ####################
     # PDF methods
     ####################
-    def generate_all_inventory_pdf(self):
-        # Obtener todos los registros
-        items = self.repository.list_all()
-
+    def generate_all_inventory_pdf(self, filters: dict = None):
+        # Llamamos a list_all y le pasamos filtros si vienen
+        items = self.repository.list_all(filters=filters)
+        
         # Generar PDF con tu generador
         pdf_path = self._pdf_generator.generate_inventory_pdf(items)
 
