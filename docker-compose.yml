@@ -42,4 +42,5 @@ volumes:
 
 networks:
   jafepa_net:
+    name: jafepa_net
     driver: bridge
