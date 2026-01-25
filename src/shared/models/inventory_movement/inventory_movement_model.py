@@ -6,6 +6,7 @@ from typing import Optional
 from uuid import uuid4
 
 from sqlalchemy import Numeric
+from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, UniqueConstraint
 
 from src.shared.models.base_model import MyBaseModel
@@ -48,12 +49,12 @@ class InventoryMovement(MyBaseModel, table=True):
         default=None, foreign_key="sale_line.id", index=True
     )
 
-    inventory: Optional["Inventory"] = Relationship(
+    inventory: Mapped[Optional["Inventory"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )
-    invoice_line: Optional["InvoiceLine"] = Relationship(
+    invoice_line: Mapped[Optional["InvoiceLine"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )
-    sale_line: Optional["SaleLine"] = Relationship(
+    sale_line: Mapped[Optional["SaleLine"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )

@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy import Date, Numeric, UniqueConstraint
+from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
 from src.shared.models.base_model import MyBaseModel
@@ -36,11 +37,11 @@ class Invoice(MyBaseModel, table=True):
     warehouse_id: int = Field(foreign_key="warehouse.id", nullable=False, index=True)
 
     # Use forward-ref strings to avoid circular imports
-    warehouse: Optional["Warehouse"] = Relationship(
+    warehouse: Mapped[Optional["Warehouse"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )
 
-    lines: List["InvoiceLine"] = Relationship(
+    lines: Mapped[List["InvoiceLine"]] = Relationship(
         back_populates="invoice",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",

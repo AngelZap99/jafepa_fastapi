@@ -2,6 +2,7 @@
 
 from typing import Optional, List
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy.orm import Mapped
 from sqlalchemy.sql import func
 from datetime import datetime
 
@@ -13,4 +14,4 @@ class Warehouse(MyBaseModel, table=True):
 
     name: str = Field(max_length=250, nullable=False)
     address: str = Field(max_length=250, nullable=False)
-    inventory: List[Inventory] = Relationship(back_populates="warehouse")
+    inventory: Mapped[List[Inventory]] = Relationship(back_populates="warehouse")

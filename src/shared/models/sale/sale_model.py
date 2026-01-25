@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy import Date, Numeric
+from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
 from src.shared.models.base_model import MyBaseModel
@@ -22,11 +23,11 @@ class Sale(MyBaseModel, table=True):
 
     client_id: int = Field(foreign_key="client.id", nullable=False, index=True)
 
-    client: Optional["Client"] = Relationship(
+    client: Mapped[Optional["Client"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )
 
-    lines: List["SaleLine"] = Relationship(
+    lines: Mapped[List["SaleLine"]] = Relationship(
         back_populates="sale",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",

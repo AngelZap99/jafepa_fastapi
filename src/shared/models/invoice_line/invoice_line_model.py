@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import Numeric
+from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
 from src.shared.models.base_model import MyBaseModel
@@ -20,11 +21,11 @@ class InvoiceLine(MyBaseModel, table=True):
     price: Decimal = Field(sa_type=Numeric(12, 2), nullable=False)
     inventory_applied: bool = Field(default=False, nullable=False, index=True)
 
-    invoice: Optional["Invoice"] = Relationship(
+    invoice: Mapped[Optional["Invoice"]] = Relationship(
         back_populates="lines",
         sa_relationship_kwargs={"lazy": "joined"},
     )
 
-    product: Optional["Product"] = Relationship(
+    product: Mapped[Optional["Product"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}
     )

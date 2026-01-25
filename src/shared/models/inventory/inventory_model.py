@@ -1,6 +1,7 @@
 # src/shared/models/inventory/inventory_model.py
 
 from typing import Optional
+from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, UniqueConstraint
 
 from src.shared.models.base_model import MyBaseModel
@@ -22,5 +23,5 @@ class Inventory(MyBaseModel, table=True):
     warehouse_id: int = Field(foreign_key="warehouse.id")
     product_id: int = Field(foreign_key="product.id")
 
-    product: Optional["Product"] = Relationship(back_populates="inventory")
-    warehouse: Optional["Warehouse"] = Relationship(back_populates="inventory")
+    product: Mapped[Optional["Product"]] = Relationship(back_populates="inventory")
+    warehouse: Mapped[Optional["Warehouse"]] = Relationship(back_populates="inventory")
