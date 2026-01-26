@@ -11,6 +11,17 @@ class UserRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def admin_exists(self) -> bool:
+        statement = (
+            select(User.id)
+            .where(
+                User.is_admin.is_(True),
+                User.is_active.is_(True),
+            )
+            .limit(1)
+        )
+        return self.session.exec(statement).first() is not None
+
     def get(self, user_id: int) -> Optional[User]:
         return self.session.get(User, user_id)
 

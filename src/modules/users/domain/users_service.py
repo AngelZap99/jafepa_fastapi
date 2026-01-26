@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from passlib.context import CryptContext
 
 from src.shared.models.user.user_model import User
-from src.modules.users.users_schema import UserCreate, UserUpdate
+from src.modules.users.users_schema import UserCreate, UserCreateAdmin, UserUpdate
 from src.modules.users.domain.users_repository import UserRepository
 
 
@@ -62,7 +62,29 @@ class UserService:
             last_name=payload.last_name,
             email=payload.email,
             password=hashed_password,
-            is_admin=payload.is_admin,
+            is_admin=False,
+            is_active=True,
+            is_verified=True,
+        )
+
+        return self.repository.add(user)
+
+    def create_admin(self, payload: UserCreateAdmin) -> User:
+        if self.repository.admin_exists():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An admin user already exists",
+            )
+
+        self._ensure_email_not_taken(payload.email)
+        hashed_password = hash_password(payload.password.get_secret_value())
+
+        user = User(
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            email=payload.email,
+            password=hashed_password,
+            is_admin=True,
             is_active=True,
             is_verified=True,
         )

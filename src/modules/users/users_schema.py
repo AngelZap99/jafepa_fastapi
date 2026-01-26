@@ -21,11 +21,11 @@ class UserBase(BaseModel):
 
 ##### INPUTS
 class UserCreateAdmin(UserBase, PasswordValidationMixin):
-    is_admin: bool = True
+    pass
 
 
 class UserCreate(UserBase, PasswordValidationMixin):
-    is_admin: bool = False
+    pass
 
 
 class UserUpdate(BaseModel):
@@ -54,5 +54,8 @@ class UserUpdateVerified(BaseModel):
 class UserResponse(UserBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    is_active: bool
+    is_verified: bool
+    is_admin: bool
     created_at: datetime
     updated_at: datetime
