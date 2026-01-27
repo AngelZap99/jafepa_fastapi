@@ -54,7 +54,7 @@ app = FastAPI(
 # =========================
 # Definir origenes permitidos
 # Para desarrollo local
-allow_origins = ["https://jafepa.com","https://www.jafepa.com"]
+allow_origins = os.getenv("ALLOWED_CORS_ORIGINS", "").split(",")
 
 app.add_middleware(
     CORSMiddleware,
