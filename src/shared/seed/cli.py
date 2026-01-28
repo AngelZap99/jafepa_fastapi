@@ -94,26 +94,33 @@ def migrate_sales_approved_to_paid(
         raise typer.Exit(code=2)
 
     engine = _get_engine()
-    with engine.begin() as conn:
-        # If Postgres enum is used for the column, ensure PAID exists as a label.
-        try:
-            type_row = conn.execute(
+    # If Postgres enum is used for the column, ensure PAID exists as a label.
+    # Postgres requires new enum values to be COMMITTED before being used, so the
+    # ALTER TYPE must run in a separate autocommit context (or separate TX).
+    try:
+        with engine.connect() as conn:
+            udt_name = conn.execute(
                 text(
                     "SELECT udt_name FROM information_schema.columns "
                     "WHERE table_name = 'sale' AND column_name = 'status' "
                     "LIMIT 1;"
                 )
-            ).fetchone()
-            if type_row:
-                udt_name = str(type_row[0])
-                if udt_name not in {"varchar", "text"} and not udt_name.startswith("_"):
+            ).scalar()
+
+        if udt_name:
+            udt_name = str(udt_name)
+            if udt_name not in {"varchar", "text"} and not udt_name.startswith("_"):
+                with engine.connect().execution_options(
+                    isolation_level="AUTOCOMMIT"
+                ) as conn:
                     conn.execute(
                         text(f"ALTER TYPE \"{udt_name}\" ADD VALUE IF NOT EXISTS 'PAID';")
                     )
-        except Exception:
-            # Best-effort: if this fails, the UPDATE below might still work (e.g., varchar status).
-            pass
+    except Exception:
+        # Best-effort: if this fails, the UPDATE below might still work (e.g., varchar status).
+        pass
 
+    with engine.begin() as conn:
         result = conn.execute(
             text("UPDATE sale SET status = 'PAID' WHERE status = 'APPROVED';")
         )
