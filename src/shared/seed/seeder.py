@@ -78,7 +78,7 @@ class SeedConfig:
 
     sales: int
     sale_lines: int
-    approve_sales: bool
+    pay_sales: bool
 
 
 def _coerce_decimal(value: str | float | int, *, places: int = 2) -> Decimal:
@@ -380,13 +380,13 @@ def seed_sales(*, session: Session, rng: random.Random, config: SeedConfig) -> N
             # Stock might have changed; skip this sale
             continue
 
-        if config.approve_sales:
+        if config.pay_sales:
             try:
                 sale_service.update_sale_status(
-                    sale.id, SaleUpdateStatus(status=SaleStatus.APPROVED)
+                    sale.id, SaleUpdateStatus(status=SaleStatus.PAID)
                 )
             except HTTPException:
-                # If approval fails (stock contention), keep it as DRAFT
+                # If payment/apply fails (stock contention), keep it as DRAFT
                 pass
 
 

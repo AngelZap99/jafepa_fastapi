@@ -49,6 +49,7 @@ class InventoryUpdate(BaseModel):
     stock: Optional[int] = Field(default=None, ge=0)
     avg_cost: Optional[float] = Field(default=None, ge=0)
     last_cost: Optional[float] = Field(default=None, ge=0)
+    is_active: Optional[bool] = None
 
     @field_validator("avg_cost", "last_cost", mode="before")
     @classmethod

@@ -79,8 +79,50 @@ def _reset_db(*, yes: bool) -> None:
         session.commit()
 
 
-@app.command()
+@app.command("migrate-sales-approved-to-paid")
+def migrate_sales_approved_to_paid(
+    yes: bool = typer.Option(False, help="Confirm running the data migration."),
+) -> None:
+    """
+    One-time data migration:
+    - sale.status: APPROVED -> PAID
+
+    This keeps the codebase compatible after removing APPROVED from SaleStatus.
+    """
+    if not yes:
+        typer.echo("Refusing to migrate without --yes.")
+        raise typer.Exit(code=2)
+
+    engine = _get_engine()
+    with engine.begin() as conn:
+        # If Postgres enum is used for the column, ensure PAID exists as a label.
+        try:
+            type_row = conn.execute(
+                text(
+                    "SELECT udt_name FROM information_schema.columns "
+                    "WHERE table_name = 'sale' AND column_name = 'status' "
+                    "LIMIT 1;"
+                )
+            ).fetchone()
+            if type_row:
+                udt_name = str(type_row[0])
+                if udt_name not in {"varchar", "text"} and not udt_name.startswith("_"):
+                    conn.execute(
+                        text(f"ALTER TYPE \"{udt_name}\" ADD VALUE IF NOT EXISTS 'PAID';")
+                    )
+        except Exception:
+            # Best-effort: if this fails, the UPDATE below might still work (e.g., varchar status).
+            pass
+
+        result = conn.execute(
+            text("UPDATE sale SET status = 'PAID' WHERE status = 'APPROVED';")
+        )
+        typer.echo(f"Migrated {result.rowcount or 0} sale rows: APPROVED -> PAID")
+
+
+@app.callback(invoke_without_command=True)
 def seed(
+    ctx: typer.Context,
     phases: List[Phase] = typer.Option(
         default=[Phase.catalogs, Phase.products, Phase.invoices, Phase.sales],
         help="Phases to run (repeatable). Order matters.",
@@ -112,14 +154,20 @@ def seed(
     # ---- sales (outbound stock)
     sales: int = typer.Option(25, min=0),
     sale_lines: int = typer.Option(4, min=0, help="Lines per sale (max)."),
-    approve_sales: bool = typer.Option(
-        True, help="Transition sales to APPROVED to apply inventory movements."
+    pay_sales: bool = typer.Option(
+        True,
+        "--pay-sales/--no-pay-sales",
+        "--approve-sales/--no-approve-sales",
+        help="Transition sales to PAID to apply inventory movements.",
     ),
 ) -> None:
     """
     Seeds the database with coherent demo data:
     catalogs → products → invoices (stock IN) → sales (stock OUT).
     """
+    if ctx.invoked_subcommand is not None:
+        return
+
     if reset:
         _reset_db(yes=yes)
 
@@ -141,7 +189,7 @@ def seed(
         arrive_invoices=arrive_invoices,
         sales=sales,
         sale_lines=sale_lines,
-        approve_sales=approve_sales,
+        pay_sales=pay_sales,
     )
 
     with Session(engine) as session:

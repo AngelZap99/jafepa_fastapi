@@ -78,9 +78,11 @@ Si `--arrive-invoices` está activo (default), cambia a `ARRIVED` usando `Invoic
 ### 4) `sales`
 
 Crea `sale` + `sale_line` en `DRAFT` tomando inventario con stock disponible.
-Si `--approve-sales` está activo (default), cambia a `APPROVED` usando `SaleService`, lo que:
+Si `--pay-sales` está activo (default), cambia a `PAID` usando `SaleService`, lo que:
 - descuenta `inventory.stock`
 - registra `inventory_movement` (salidas)
+
+Nota: `PAID` es el estado que aplica inventario; volver de `PAID -> DRAFT` revierte inventario.
 
 ## Controles de cantidad
 
@@ -135,4 +137,3 @@ docker-compose exec api python -m src.shared.seed --reset --yes
 - `RuntimeError: Missing environment variables ...` → completa tu `.env` (DB_*).
 - No se crean ventas → no hay stock suficiente; corre `invoices` con `--arrive-invoices` o incrementa `--invoices/--invoice-lines`.
 - Errores por duplicados en `append` → usa `--insert-mode skip`/`upsert` o ejecuta `--reset --yes`.
-

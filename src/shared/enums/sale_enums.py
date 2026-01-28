@@ -3,5 +3,12 @@ from enum import Enum
 
 class SaleStatus(str, Enum):
     DRAFT = "DRAFT"
-    APPROVED = "APPROVED"
+    PAID = "PAID"
     CANCELLED = "CANCELLED"
+
+    @classmethod
+    def _missing_(cls, value):  # type: ignore[override]
+        # Backward compatibility: legacy status stored as "APPROVED" should behave as PAID.
+        if isinstance(value, str) and value.upper() == "APPROVED":
+            return cls.PAID
+        return None

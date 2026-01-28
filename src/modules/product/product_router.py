@@ -2,9 +2,20 @@ from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
 
 from src.shared.database.dependencies import SessionDep
-from src.modules.product.product_schema import ProductCreate, ProductUpdate, ProductResponse
+from src.modules.product.product_schema import (
+    ProductCreate,
+    ProductUpdate,
+    ProductResponse,
+    ProductStockResponse,
+    InventoryStockItem,
+)
 from src.modules.product.domain.product_service import ProductService
 from src.modules.product.domain.product_repository import ProductRepository
+from src.shared.models.inventory.inventory_model import Inventory
+from src.shared.models.product.product_model import Product
+from src.shared.models.warehouse.warehouse_model import Warehouse
+
+from collections import defaultdict
 
 router = APIRouter(
     prefix="/products",
@@ -60,3 +71,69 @@ def delete_product(product_id: int, service: ProductService = Depends(get_produc
         if e.status_code == 404:
             return JSONResponse(status_code=404, content={"error": e.detail})
         raise e
+
+
+@router.get("/list-stock", response_model=list[ProductStockResponse])
+def list_products_with_stock(
+    warehouse_id: int,
+    session: SessionDep,
+    search: str | None = None,
+    only_in_stock: bool = False,
+    include_inactive: bool = True,
+    skip: int = 0,
+    limit: int = 100,
+):
+    """
+    BFF endpoint for Sales UI:
+    returns products + their inventory entries (and total stock) for a given warehouse.
+    """
+    warehouse = session.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+    if not warehouse:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+
+    q = (
+        session.query(Product)
+        .order_by(Product.id)
+    )
+    if not include_inactive:
+        q = q.filter(Product.is_active == True)  # noqa: E712
+    if search:
+        s = f"%{search.strip()}%"
+        q = q.filter((Product.name.ilike(s)) | (Product.code.ilike(s)))
+
+    products = q.offset(skip).limit(limit).all()
+    if not products:
+        return []
+
+    product_ids = [p.id for p in products]
+    inv_q = session.query(Inventory).filter(
+        Inventory.warehouse_id == warehouse_id, Inventory.product_id.in_(product_ids)
+    )
+    if not include_inactive:
+        inv_q = inv_q.filter(Inventory.is_active == True)  # noqa: E712
+    inventories = inv_q.all()
+
+    inv_map: dict[int, list[Inventory]] = defaultdict(list)
+    for inv in inventories:
+        inv_map[inv.product_id].append(inv)
+
+    out: list[ProductStockResponse] = []
+    for product in products:
+        inv_items = inv_map.get(product.id, [])
+        stock_total = sum(i.stock for i in inv_items if include_inactive or i.is_active)
+        if only_in_stock and stock_total <= 0:
+            continue
+
+        base = ProductResponse.model_validate(product, from_attributes=True)
+        out.append(
+            ProductStockResponse(
+                **base.model_dump(),
+                stock_total=stock_total,
+                inventory=[
+                    InventoryStockItem.model_validate(i, from_attributes=True)
+                    for i in inv_items
+                ],
+            )
+        )
+
+    return out

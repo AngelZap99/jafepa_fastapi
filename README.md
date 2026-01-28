@@ -224,6 +224,7 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
 - **Products** (`src/modules/product/product_router.py`)
   - `GET /api/products/list`
   - `GET /api/products/{product_id}`
+  - `GET /api/products/list-stock?warehouse_id={warehouse_id}` (BFF for Sales: includes stock per product)
   - `POST /api/products/create` (multipart/form-data, optional `image_file`)
   - `PUT /api/products/update/{product_id}` (multipart/form-data, optional `image_file`)
   - `DELETE /api/products/delete/{product_id}`
