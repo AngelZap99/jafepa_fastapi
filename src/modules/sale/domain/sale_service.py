@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from src.shared.enums.inventory_enums import (
     InventoryEventType,
@@ -35,6 +35,12 @@ from src.modules.sale.sale_schema import (
     SaleReportSaleDetail,
     SaleReportSaleLine,
 )
+
+
+def _sqlstate(err: DBAPIError) -> str | None:
+    # Tries common psycopg/psycopg2 attributes
+    orig = getattr(err, "orig", None)
+    return getattr(orig, "pgcode", None) or getattr(orig, "sqlstate", None)
 
 
 class SaleService:
@@ -278,43 +284,77 @@ class SaleService:
     def update_sale_status(self, sale_id: int, payload: SaleUpdateStatus) -> Sale:
         session = self.repository.db
 
-        with session.begin():
-            sale = (
-                session.query(Sale)
-                .filter(Sale.id == sale_id, Sale.is_active == True)  # noqa: E712
-                .with_for_update()
-                .first()
+        try:
+            with session.begin():
+                # Lock only the `sale` row. Querying the ORM entity here can
+                # include eager outer joins (e.g., to `client`), and Postgres
+                # rejects `FOR UPDATE` on the nullable side of an outer join.
+                locked = (
+                    session.query(Sale.id)
+                    .filter(Sale.id == sale_id, Sale.is_active == True)  # noqa: E712
+                    .with_for_update()
+                    .first()
+                )
+                if not locked:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found"
+                    )
+
+                sale = self._get_sale_or_404(sale_id)
+                previous_status = sale.status
+                new_status = payload.status
+
+                if previous_status == new_status:
+                    return sale
+
+                allowed_transitions = {
+                    SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
+                    SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
+                    SaleStatus.CANCELLED: {SaleStatus.DRAFT},
+                }
+                if new_status not in allowed_transitions.get(previous_status, set()):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Invalid status transition.",
+                    )
+
+                if new_status == SaleStatus.PAID:
+                    self._apply_sale_paid(sale)
+                elif previous_status == SaleStatus.PAID:
+                    self._apply_sale_unpaid(sale)
+
+                sale.status = new_status
+                session.add(sale)
+        except IntegrityError as e:
+            state = _sqlstate(e)
+            if state in {"22P02", "23514"} and "PAID" in str(getattr(e, "orig", e)):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        "Database schema does not accept sale.status='PAID'. "
+                        "Run the one-time migration: `python -m src.shared.seed.cli "
+                        "migrate-sales-approved-to-paid --yes`."
+                    ),
+                )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Integrity constraint violated while updating sale status.",
             )
-            if not sale:
+        except DBAPIError as e:
+            state = _sqlstate(e)
+            if state in {"22P02", "23514"} and "PAID" in str(getattr(e, "orig", e)):
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found"
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        "Database schema does not accept sale.status='PAID'. "
+                        "Run the one-time migration: `python -m src.shared.seed.cli "
+                        "migrate-sales-approved-to-paid --yes`."
+                    ),
                 )
-
-            sale = self._get_sale_or_404(sale_id)
-            previous_status = sale.status
-            new_status = payload.status
-
-            if previous_status == new_status:
-                return sale
-
-            allowed_transitions = {
-                SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
-                SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
-                SaleStatus.CANCELLED: {SaleStatus.DRAFT},
-            }
-            if new_status not in allowed_transitions.get(previous_status, set()):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Invalid status transition.",
-                )
-
-            if new_status == SaleStatus.PAID:
-                self._apply_sale_paid(sale)
-            elif previous_status == SaleStatus.PAID:
-                self._apply_sale_unpaid(sale)
-
-            sale.status = new_status
-            session.add(sale)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Database error while updating sale status. Check server logs.",
+            )
 
         return self._get_sale_or_404(sale_id)
 

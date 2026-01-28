@@ -40,6 +40,14 @@ def _sqlstate(err: IntegrityError) -> str | None:
     return getattr(orig, "pgcode", None) or getattr(orig, "sqlstate", None)
 
 
+def _constraint_name(err: IntegrityError) -> str | None:
+    orig = getattr(err, "orig", None)
+    diag = getattr(orig, "diag", None)
+    return getattr(diag, "constraint_name", None) or getattr(
+        orig, "constraint_name", None
+    )
+
+
 class InvoiceService:
     def __init__(self, repository: InvoiceRepository) -> None:
         self.repository = repository
@@ -230,11 +238,13 @@ class InvoiceService:
         return self._get_invoice_or_404(invoice_id)
 
     def create_invoice(self, payload: InvoiceCreateWithLines) -> Invoice:
-        if payload.status != InvoiceStatus.DRAFT:
+        if payload.status not in {InvoiceStatus.DRAFT, InvoiceStatus.ARRIVED}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Invoice must be created in DRAFT status.",
+                detail="Invoice must be created in DRAFT or ARRIVED status.",
             )
+
+        session = self.repository.db
         invoice = Invoice(
             invoice_number=payload.invoice_number,
             sequence=payload.sequence,
@@ -262,14 +272,24 @@ class InvoiceService:
             )
 
         try:
-            self.repository.add(invoice)
+            with session.begin():
+                session.add(invoice)
+                session.flush()
+
+                if payload.status == InvoiceStatus.ARRIVED:
+                    self._apply_invoice_received(invoice)
         except IntegrityError as e:
             # Translate DB constraint errors to HTTP
             state = _sqlstate(e)
             if state == "23505":
+                constraint = _constraint_name(e)
+                if constraint == "uq_invoice_sequence":
+                    detail = "Invoice number or sequence already exists"
+                else:
+                    detail = "Unique constraint violated"
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Invoice number or sequence already exists",
+                    detail=detail,
                 )
             if state == "23503":
                 raise HTTPException(
