@@ -54,7 +54,8 @@ app = FastAPI(
 # =========================
 # Definir origenes permitidos
 # Para desarrollo local
-allow_origins = ["http://localhost:5173"]
+allow_origins_raw = os.getenv("ALLOWED_CORS_ORIGINS") or os.getenv("CORS_ORIGINS", "")
+allow_origins = [o.strip() for o in allow_origins_raw.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,7 +69,7 @@ app.add_middleware(
 # =========================
 # Routers
 # =========================
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
 
 
 # =========================

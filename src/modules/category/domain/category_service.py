@@ -41,8 +41,8 @@ class CategoryService:
             )
 
     def list_categories(self, skip: int = 0, limit: int = 100) -> List[Category]:
-        all_categorys = self.repository.list(skip=skip, limit=limit)
-        return [category for category in all_categorys if category.deleted_at is None]
+        # By default, list should include inactive records too.
+        return self.repository.list(skip=skip, limit=limit)
 
     def get_category(self, category_id: int) -> Category:
         return self._get_category_or_404(category_id)

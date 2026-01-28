@@ -80,7 +80,7 @@ def create_admin(
     payload: UserCreateAdmin,
     user_service: UserService = Depends(get_user_service),
 ):
-    return user_service.create_user(payload)
+    return user_service.create_admin(payload)
 
 
 @router.put(

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
+from uuid import uuid4
 
 import jwt  # PyJWT
 
@@ -18,6 +19,7 @@ def _create_token(
 
     to_encode["iat"] = int(now.timestamp())
     to_encode["exp"] = int(expire.timestamp())
+    to_encode["jti"] = str(uuid4())
 
     encoded_jwt = jwt.encode(
         to_encode,

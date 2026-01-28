@@ -22,7 +22,7 @@ Backend service for the JAFEPA platform built with FastAPI and SQLModel.
 
 ## 1. Overview
 
-- **Purpose**: Provide a modular API to manage users (and upcoming auth features) for the JAFEPA application.
+- **Purpose**: Provide a modular API for the JAFEPA application (users/auth + catalog, inventory, invoices and sales).
 - **Architecture**: Service/repository pattern with centralized error handling via `src/shared/error_handler.py`.
 - **Entry point**: `main.py` wires dependencies, middlewares, handlers, and exposes routers through `api_router`.
 
@@ -79,12 +79,15 @@ JAFEPA-backend/
   - `DB_PASSWORD`
 - Optional keys:
   - `PYENV` (defaults to `development`; enables SQL logging in dev)
-  - `CORS_ORIGINS` (comma-separated list; defaults to `http://localhost:3000`)
-- Required keys to JWT and auth:
-  - `JWT_SECRET`
-  - `JWT_EXPIRES_IN`
+  - `ALLOWED_CORS_ORIGINS` (comma-separated list; e.g. `http://localhost:3000,http://localhost:5173`)
+- JWT/auth keys (used by `src/shared/config/env_config.py`):
+  - `JWT_SECRET_KEY`
+  - `JWT_ALGORITHM` (default `HS256`)
+  - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default `30`)
+  - `JWT_REFRESH_TOKEN_EXPIRE_DAYS` (default `7`)
+  - `JWT_ENCRYPTION_KEY` (optional)
 
-> Missing required variables raise `ValueError` at startup, ensuring misconfigurations are detected early.
+> Missing required variables raise `RuntimeError` at startup, ensuring misconfigurations are detected early.
 
 ## 6. Installation
 
@@ -171,19 +174,99 @@ Adopt additional tools (`isort`, `mypy`) as required by team standards.
 
 ## 11. API Summary
 
-- **Router aggregator**: `src/modules/router.py` exposes `api_router`.
-- **Users module** (`src/modules/users/users_router.py`):
-  - `PUT /users/list` <- Get all users with pagination and optional filters
-  - `GET /users/{guid}` <- Get user by guid
-  - `GET /users/me` <- Get context user by token
-  - `POST /users/create` <- Create user
-  - `POST /users/create-admin` <- Create admin
-  - `PATCH /users/update/{guid}` <- Update user
-  - `DELETE /users/{guid}` <- Delete user.  
-- **Auth module** (`src/modules/auth/auth_router.py`):
-  - `POST /auth/login` <- Login
-  - `POST /auth/register` <- Register
-  - `POST /auth/refresh` <- Refresh token
+All module routes are mounted under the `/api` prefix in `main.py` (example: `GET /api/users/list`). Swagger/ReDoc include the full paths.
+
+### Auth
+
+- Login: `POST /api/auth/login` → returns `{ access_token, refresh_token, token_type }`
+- Refresh: `POST /api/auth/refresh` → returns a new token pair
+- Protected endpoints expect: `Authorization: Bearer <access_token>`
+
+### Endpoints (by module)
+
+- **Users** (`src/modules/users/users_router.py`)
+  - `GET /api/users/list`
+  - `GET /api/users/me` (requires auth)
+  - `GET /api/users/{user_id}`
+  - `POST /api/users/createUser`
+  - `POST /api/users/createAdmin`
+  - `PUT /api/users/update/{user_id}`
+  - `DELETE /api/users/delete/{user_id}`
+
+- **Clients** (`src/modules/client/client_router.py`, requires auth)
+  - `GET /api/clients/list`
+  - `GET /api/clients/{client_id}`
+  - `POST /api/clients/create`
+  - `PUT /api/clients/update/{client_id}`
+  - `DELETE /api/clients/delete/{client_id}`
+
+- **Warehouses** (`src/modules/warehouse/warehouse_router.py`, requires auth)
+  - `GET /api/warehouses/list`
+  - `GET /api/warehouses/{warehouse_id}`
+  - `POST /api/warehouses/create`
+  - `PUT /api/warehouses/update/{warehouse_id}`
+  - `DELETE /api/warehouses/delete/{warehouse_id}`
+
+- **Categories** (`src/modules/category/category_router.py`)
+  - `GET /api/categories/list`
+  - `GET /api/categories/{category_id}`
+  - `POST /api/categories/create`
+  - `PUT /api/categories/update/{category_id}`
+  - `DELETE /api/categories/delete/{category_id}`
+
+- **Brands** (`src/modules/brand/brand_router.py`)
+  - `GET /api/brands/list`
+  - `GET /api/brands/{brand_id}`
+  - `POST /api/brands/create`
+  - `PUT /api/brands/update/{brand_id}`
+  - `DELETE /api/brands/delete/{brand_id}`
+
+- **Products** (`src/modules/product/product_router.py`)
+  - `GET /api/products/list`
+  - `GET /api/products/{product_id}`
+  - `GET /api/products/list-stock?warehouse_id={warehouse_id}` (BFF for Sales: includes stock per product)
+  - `POST /api/products/create` (multipart/form-data, optional `image_file`)
+  - `PUT /api/products/update/{product_id}` (multipart/form-data, optional `image_file`)
+  - `DELETE /api/products/delete/{product_id}`
+
+- **Invoices** (`src/modules/invoice/invoice_router.py`)
+  - `GET /api/invoices/list?skip=0&limit=100`
+  - `GET /api/invoices/{invoice_id}`
+  - `POST /api/invoices/create`
+  - `PUT /api/invoices/update/{invoice_id}`
+  - `PUT /api/invoices/update-status/{invoice_id}`
+  - `DELETE /api/invoices/delete/{invoice_id}`
+
+- **Invoice lines** (`src/modules/invoice_line/invoice_line_router.py`)
+  - `GET /api/invoice-lines/list/{invoice_id}?skip=0&limit=100`
+  - `POST /api/invoice-lines/create/{invoice_id}`
+  - `PUT /api/invoice-lines/update/{invoice_id}/{line_id}`
+  - `DELETE /api/invoice-lines/delete/{invoice_id}/{line_id}`
+
+- **Inventory** (`src/modules/inventory/inventory_router.py`)
+  - `GET /api/inventory/list`
+  - `GET /api/inventory/{inventory_id}`
+  - `POST /api/inventory/create`
+  - `PUT /api/inventory/update/{inventory_id}`
+  - `DELETE /api/inventory/delete/{inventory_id}`
+  - `GET /api/inventory/movements` (filters + pagination: `skip`, `limit`)
+  - `GET /api/inventory/pdf/all` (query filters like `categoria`, `subcategoria`, `marca`, `buscar`, `ids`)
+
+- **Sales** (`src/modules/sale/sale_router.py`)
+  - `GET /api/sales/report` (requires `from_date` + `to_date`; optional filters)
+  - `GET /api/sales/list?skip=0&limit=100`
+  - `GET /api/sales/{sale_id}`
+  - `POST /api/sales/create`
+  - `PUT /api/sales/update/{sale_id}`
+  - `PUT /api/sales/update-status/{sale_id}`
+  - `DELETE /api/sales/delete/{sale_id}`
+  - `POST /api/sales/{sale_id}/lines`
+  - `PUT /api/sales/{sale_id}/lines/{line_id}`
+  - `DELETE /api/sales/{sale_id}/lines/{line_id}`
+
+### Non-API (dev/test)
+
+- `GET /test-cors` (not under `/api`)
 
 ## 12. Recommended Workflow
 

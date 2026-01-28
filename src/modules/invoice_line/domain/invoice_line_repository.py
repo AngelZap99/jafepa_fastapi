@@ -18,7 +18,7 @@ class InvoiceLineRepository:
         invoice_id: int,
         skip: int = 0,
         limit: int = 100,
-        include_inactive: bool = False,
+        include_inactive: bool = True,
     ) -> List[InvoiceLine]:
         q = (
             self.db.query(InvoiceLine)

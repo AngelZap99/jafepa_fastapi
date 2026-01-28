@@ -9,7 +9,8 @@ from src.shared.auth.jwt_auth import decode_token
 from src.shared.models.user.user_model import User
 from src.modules.users.domain.users_repository import UserRepository
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# Routers are mounted under `/api` in `main.py`
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def get_current_user(

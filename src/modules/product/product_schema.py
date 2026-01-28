@@ -85,6 +85,7 @@ class ProductUpdate(BaseModel):
     brand_id: Optional[int] = None
 
     image: Optional[str] = Field(default=None, max_length=500)
+    is_active: Optional[bool] = None
 
     @field_validator("code", mode="before")
     @classmethod
@@ -101,6 +102,7 @@ class ProductUpdate(BaseModel):
         subcategory_id: Optional[int] = Form(None),
         brand_id: Optional[int] = Form(None),
         image: Optional[str] = Form(None),
+        is_active: Optional[bool] = Form(None),
     ) -> "ProductUpdate":
         return cls(
             name=name,
@@ -110,6 +112,7 @@ class ProductUpdate(BaseModel):
             subcategory_id=subcategory_id,
             brand_id=brand_id,
             image=image,
+            is_active=is_active,
         )
 
 
@@ -142,3 +145,21 @@ class ProductResponse(ProductBase):
     brand: Optional[BrandResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InventoryStockItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    warehouse_id: int
+    product_id: int
+    box_size: int
+    stock: int
+    avg_cost: float
+    last_cost: float
+    is_active: bool
+
+
+class ProductStockResponse(ProductResponse):
+    stock_total: int = 0
+    inventory: list[InventoryStockItem] = Field(default_factory=list)

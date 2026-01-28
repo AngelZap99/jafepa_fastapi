@@ -31,9 +31,8 @@ class BrandService:
         return brand
 
     def list_brands(self, skip: int = 0, limit: int = 100) -> List[Brand]:
-        # Solo marcas activas (deleted_at es None)
-        all_brands = self.repository.list(skip=skip, limit=limit)
-        return [brand for brand in all_brands if brand.deleted_at is None]
+        # By default, list should include inactive records too.
+        return self.repository.list(skip=skip, limit=limit)
 
     def get_brand(self, brand_id: int) -> Brand:
         return self._get_brand_or_404(brand_id)

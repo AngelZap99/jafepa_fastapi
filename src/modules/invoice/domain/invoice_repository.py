@@ -13,7 +13,7 @@ class InvoiceRepository:
         self.db = db
 
     def list(
-        self, skip: int = 0, limit: int = 100, include_inactive: bool = False
+        self, skip: int = 0, limit: int = 100, include_inactive: bool = True
     ) -> List[Invoice]:
         q = (
             self.db.query(Invoice)

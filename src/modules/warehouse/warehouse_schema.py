@@ -17,6 +17,7 @@ class WarehouseCreate(WarehouseBase):
 class WarehouseUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
     address: Optional[str] = Field(default=None, min_length=5, max_length=250)
+    is_active: Optional[bool] = None
 
 
 ##### OUTPUTS
@@ -24,5 +25,7 @@ class WarehouseResponse(WarehouseBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    is_active: bool
+    deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

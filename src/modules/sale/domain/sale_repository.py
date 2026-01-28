@@ -15,7 +15,7 @@ class SaleRepository:
         self.db = db
 
     def list(
-        self, skip: int = 0, limit: int = 100, include_inactive: bool = False
+        self, skip: int = 0, limit: int = 100, include_inactive: bool = True
     ) -> List[Sale]:
         q = (
             self.db.query(Sale)

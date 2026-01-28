@@ -83,7 +83,7 @@ class SaleService:
                 total += line.total_price
         sale.total_price = total
 
-    def _apply_sale_approved(self, sale: Sale) -> None:
+    def _apply_sale_paid(self, sale: Sale) -> None:
         session = self.repository.db
         inventory_repository = InventoryRepository(session)
         movement_repository = InventoryMovementRepository(session)
@@ -148,7 +148,7 @@ class SaleService:
 
             movement_sequence += 1
 
-    def _apply_sale_reversed(self, sale: Sale) -> None:
+    def _apply_sale_unpaid(self, sale: Sale) -> None:
         session = self.repository.db
         inventory_repository = InventoryRepository(session)
         movement_repository = InventoryMovementRepository(session)
@@ -255,10 +255,10 @@ class SaleService:
 
     def update_sale(self, sale_id: int, payload: SaleUpdate) -> Sale:
         sale = self._get_sale_or_404(sale_id)
-        if sale.status == SaleStatus.APPROVED:
+        if sale.status == SaleStatus.PAID:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify an APPROVED sale. Revert status first.",
+                detail="Cannot modify a PAID sale. Revert status first.",
             )
 
         data = payload.model_dump(exclude_unset=True)
@@ -298,8 +298,8 @@ class SaleService:
                 return sale
 
             allowed_transitions = {
-                SaleStatus.DRAFT: {SaleStatus.APPROVED, SaleStatus.CANCELLED},
-                SaleStatus.APPROVED: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
+                SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
+                SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
                 SaleStatus.CANCELLED: {SaleStatus.DRAFT},
             }
             if new_status not in allowed_transitions.get(previous_status, set()):
@@ -308,10 +308,10 @@ class SaleService:
                     detail="Invalid status transition.",
                 )
 
-            if new_status == SaleStatus.APPROVED:
-                self._apply_sale_approved(sale)
-            elif previous_status == SaleStatus.APPROVED:
-                self._apply_sale_reversed(sale)
+            if new_status == SaleStatus.PAID:
+                self._apply_sale_paid(sale)
+            elif previous_status == SaleStatus.PAID:
+                self._apply_sale_unpaid(sale)
 
             sale.status = new_status
             session.add(sale)
@@ -320,20 +320,20 @@ class SaleService:
 
     def delete_sale(self, sale_id: int) -> Sale:
         sale = self._get_sale_or_404(sale_id)
-        if sale.status == SaleStatus.APPROVED:
+        if sale.status == SaleStatus.PAID:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot delete an APPROVED sale. Revert status first.",
+                detail="Cannot delete a PAID sale. Revert status first.",
             )
         self.repository.soft_delete(sale)
         return self.repository.get(sale_id, include_inactive=True)  # type: ignore[return-value]
 
     def add_sale_line(self, sale_id: int, payload: SaleLineCreate) -> SaleLine:
         sale = self._get_sale_or_404(sale_id)
-        if sale.status == SaleStatus.APPROVED:
+        if sale.status == SaleStatus.PAID:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of an APPROVED sale. Revert status first.",
+                detail="Cannot modify lines of a PAID sale. Revert status first.",
             )
 
         for existing in sale.lines:
@@ -370,10 +370,10 @@ class SaleService:
         self, sale_id: int, line_id: int, payload: SaleLineUpdate
     ) -> SaleLine:
         line = self._get_line_or_404(sale_id, line_id)
-        if line.sale and line.sale.status == SaleStatus.APPROVED:
+        if line.sale and line.sale.status == SaleStatus.PAID:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of an APPROVED sale. Revert status first.",
+                detail="Cannot modify lines of a PAID sale. Revert status first.",
             )
 
         data = payload.model_dump(exclude_unset=True)
@@ -406,10 +406,10 @@ class SaleService:
 
     def delete_sale_line(self, sale_id: int, line_id: int) -> SaleLine:
         line = self._get_line_or_404(sale_id, line_id)
-        if line.sale and line.sale.status == SaleStatus.APPROVED:
+        if line.sale and line.sale.status == SaleStatus.PAID:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of an APPROVED sale. Revert status first.",
+                detail="Cannot modify lines of a PAID sale. Revert status first.",
             )
 
         line = self.repository.soft_delete_line(line)
