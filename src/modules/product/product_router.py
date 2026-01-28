@@ -30,10 +30,6 @@ def get_product_service(session: SessionDep) -> ProductService:
 def list_products(service: ProductService = Depends(get_product_service)):
     return service.list_products()
 
-@router.get("/{product_id}", response_model=ProductResponse)
-def get_product(product_id: int, service: ProductService = Depends(get_product_service)):
-    return service.get_product(product_id)
-
 @router.post("/create", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
     payload: ProductCreate = Depends(ProductCreate.as_form),
@@ -137,3 +133,8 @@ def list_products_with_stock(
         )
 
     return out
+
+
+@router.get("/{product_id:int}", response_model=ProductResponse)
+def get_product(product_id: int, service: ProductService = Depends(get_product_service)):
+    return service.get_product(product_id)
