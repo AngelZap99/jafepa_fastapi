@@ -68,8 +68,14 @@ class InvoiceService:
             )
         return line
 
-    def _line_total_units(self, line: InvoiceLine) -> int:
-        return line.total_units or (line.box_size * line.quantity_boxes)
+    def _line_stock_quantity(self, line: InvoiceLine) -> int:
+        # In this system, `Inventory.stock` represents PACKAGES/BOXES for a given `box_size`.
+        return line.quantity_boxes
+
+    def _line_presentation_unit_cost(self, line: InvoiceLine) -> Decimal:
+        # Invoices send `price` as unit price (per inner unit). Convert to presentation cost.
+        # Example: a box of 12 units → unit price * 12.
+        return line.price * Decimal(str(line.box_size))
 
     def _compute_recent_avg_cost(
         self,
@@ -100,7 +106,7 @@ class InvoiceService:
             if not line.is_active or line.inventory_applied:
                 continue
 
-            quantity = self._line_total_units(line)
+            quantity = self._line_stock_quantity(line)
             if quantity <= 0:
                 continue
 
@@ -110,7 +116,7 @@ class InvoiceService:
                 box_size=line.box_size,
             )
 
-            unit_cost = line.price
+            unit_cost = self._line_presentation_unit_cost(line)
             if inventory is None:
                 inventory = Inventory(
                     stock=0,
@@ -173,7 +179,7 @@ class InvoiceService:
             if not line.is_active or not line.inventory_applied:
                 continue
 
-            quantity = self._line_total_units(line)
+            quantity = self._line_stock_quantity(line)
             if quantity <= 0:
                 continue
 
@@ -217,7 +223,7 @@ class InvoiceService:
                 event_type=InventoryEventType.INVOICE_UNRECEIVED,
                 movement_type=InventoryMovementType.OUT,
                 quantity=quantity,
-                unit_cost=line.price,
+                unit_cost=self._line_presentation_unit_cost(line),
                 prev_stock=prev_stock,
                 new_stock=new_stock,
                 inventory_id=inventory.id,
