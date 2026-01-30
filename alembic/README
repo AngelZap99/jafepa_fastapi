@@ -1,0 +1,7 @@
+Alembic migrations for JAFEPA.
+
+- `alembic upgrade head` applies all migrations.
+- Create a new migration:
+  - `alembic revision --autogenerate -m "..."` (requires models updated)
+  - `alembic upgrade head`
+

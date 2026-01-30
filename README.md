@@ -156,9 +156,17 @@ Update `docker-compose.yml` as additional services are introduced.
 
 ## 9. Database Management
 
-- Tables are auto-created at startup via `SQLModel.metadata.create_all(engine)` in `main.py`.
-- For schema changes, modify models in `src/shared/models/` and restart the application.
-- Consider adding Alembic for versioned migrations once the schema grows.
+- Tables are auto-created at startup via `SQLModel.metadata.create_all(engine)` in `main.py` (dev convenience).
+- For real schema changes (production), use Alembic migrations.
+
+### Alembic (migrations)
+
+- Run migrations in containers:
+  - `docker compose up -d --build`
+  - The `api` service runs `alembic upgrade head` on startup.
+- Create a new migration:
+  - `alembic revision --autogenerate -m "your message"`
+  - `alembic upgrade head`
 
 ## 10. Linting & Formatting
 
