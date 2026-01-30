@@ -19,7 +19,10 @@ target_metadata = SQLModel.metadata
 
 
 def _set_sqlalchemy_url_from_engine() -> None:
-    url = engine.url.render_as_string(hide_password=False)
+    # Alembic uses ConfigParser which treats `%` as interpolation markers.
+    # SQLAlchemy URLs may contain percent-encoded sequences (e.g. `%40`) when
+    # the password has special characters, so we must escape `%` as `%%`.
+    url = engine.url.render_as_string(hide_password=False).replace("%", "%%")
     config.set_main_option("sqlalchemy.url", url)
 
 
@@ -56,4 +59,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-
