@@ -7,7 +7,7 @@ def test_create_user_defaults_to_non_admin(client):
         "is_admin": True,  # should be ignored server-side
     }
 
-    resp = client.post("/users/createUser", json=payload)
+    resp = client.post("/api/users/createUser", json=payload)
     assert resp.status_code == 201, resp.text
 
     data = resp.json()
@@ -25,12 +25,12 @@ def test_create_admin_only_once(client):
         "password": "StrongPass1",
     }
 
-    first = client.post("/users/createAdmin", json=payload)
+    first = client.post("/api/users/createAdmin", json=payload)
     assert first.status_code == 201, first.text
     assert first.json()["is_admin"] is True
 
     second = client.post(
-        "/users/createAdmin",
+        "/api/users/createAdmin",
         json={
             "first_name": "Admin",
             "last_name": "Two",
@@ -40,4 +40,3 @@ def test_create_admin_only_once(client):
     )
     assert second.status_code == 409, second.text
     assert second.json()["detail"] == "An admin user already exists"
-

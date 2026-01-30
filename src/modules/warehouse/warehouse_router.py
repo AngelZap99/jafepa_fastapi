@@ -39,7 +39,7 @@ def list_warehouses(
 
 
 @router.get(
-    "/{warehouse_id}",
+    "/{warehouse_id:int}",
     response_model=WarehouseResponse,
     status_code=status.HTTP_200_OK,
 )

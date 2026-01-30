@@ -38,7 +38,7 @@ def list_categories(
 
 
 @router.get(
-    "/{category_id}",
+    "/{category_id:int}",
     response_model=CategoryResponse,
     status_code=status.HTTP_200_OK,
 )

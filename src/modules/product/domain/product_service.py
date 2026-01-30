@@ -14,7 +14,12 @@ class ProductService:
     def __init__(self, repository: ProductRepository) -> None:
         self.repository = repository
         self.image_validator = ImageValidator()
-        self.s3 = S3FileHandler()
+        self._s3: S3FileHandler | None = None
+
+    def _get_s3(self) -> S3FileHandler:
+        if self._s3 is None:
+            self._s3 = S3FileHandler()
+        return self._s3
 
     def _get_product_or_404(self, product_id: int) -> Product:
         product = self.repository.get(product_id)
@@ -35,7 +40,7 @@ class ProductService:
             allowed_mime_types={"image/jpeg", "image/png", ".webp"},
             require_magic_bytes=True,
         )
-        return self.s3.upload_uploadfile(
+        return self._get_s3().upload_uploadfile(
             image,
             prefix=f"PRODUCT_IMAGES/{product_id}",
             make_public=True,
@@ -79,7 +84,7 @@ class ProductService:
                 product = self.repository.update(product)
             except Exception:
                 if key:
-                    self.s3.delete_file(key)
+                    self._get_s3().delete_file(key)
                 raise
 
         return product
@@ -114,11 +119,11 @@ class ProductService:
                 product = self.repository.update(product)
             except Exception:
                 if key:
-                    self.s3.delete_file(key)
+                    self._get_s3().delete_file(key)
                 raise
 
             if old_image:
-                self.s3.delete_file(old_image)
+                self._get_s3().delete_file(old_image)
 
         return self.repository.update(product)
 

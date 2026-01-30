@@ -1,6 +1,6 @@
 def _create_user(client, email: str, password: str):
     return client.post(
-        "/users/createUser",
+        "/api/users/createUser",
         json={
             "first_name": "Test",
             "last_name": "User",
@@ -11,7 +11,7 @@ def _create_user(client, email: str, password: str):
 
 
 def _login(client, email: str, password: str):
-    return client.post("/auth/login", json={"email": email, "password": password})
+    return client.post("/api/auth/login", json={"email": email, "password": password})
 
 
 def test_login_success_returns_tokens(client):
@@ -46,14 +46,14 @@ def test_users_me_requires_token_and_returns_user(client):
     created = _create_user(client, email, password)
     assert created.status_code == 201, created.text
 
-    no_token = client.get("/users/me")
+    no_token = client.get("/api/users/me")
     assert no_token.status_code == 401, no_token.text
 
     login = _login(client, email, password)
     assert login.status_code == 200, login.text
     access = login.json()["access_token"]
 
-    me = client.get("/users/me", headers={"Authorization": f"Bearer {access}"})
+    me = client.get("/api/users/me", headers={"Authorization": f"Bearer {access}"})
     assert me.status_code == 200, me.text
     assert me.json()["email"] == email
 
@@ -68,11 +68,10 @@ def test_refresh_token_rotates_tokens(client):
     assert login.status_code == 200, login.text
     refresh_token = login.json()["refresh_token"]
 
-    refreshed = client.post("/auth/refresh", json={"refresh_token": refresh_token})
+    refreshed = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
     assert refreshed.status_code == 200, refreshed.text
     data = refreshed.json()
 
     assert data["token_type"] == "bearer"
     assert data["access_token"] != login.json()["access_token"]
     assert data["refresh_token"] != refresh_token
-

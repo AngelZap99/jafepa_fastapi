@@ -53,6 +53,8 @@ class WarehouseService:
         warehouse = Warehouse(
             name=payload.name,
             address=payload.address,
+            email=payload.email,
+            phone=payload.phone,
             is_active=True,
         )
 

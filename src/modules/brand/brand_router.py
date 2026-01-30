@@ -41,7 +41,7 @@ def list_brands(
 
 
 @router.get(
-    "/{brand_id}",
+    "/{brand_id:int}",
     response_model=BrandResponse,
     status_code=status.HTTP_200_OK,
 )

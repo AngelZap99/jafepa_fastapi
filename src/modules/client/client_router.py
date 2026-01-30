@@ -39,7 +39,7 @@ def list_clients(
 
 
 @router.get(
-    "/{client_id}",
+    "/{client_id:int}",
     response_model=ClientResponse,
     status_code=status.HTTP_200_OK,
 )
