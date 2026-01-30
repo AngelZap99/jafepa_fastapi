@@ -40,6 +40,14 @@ def _sqlstate(err: IntegrityError) -> str | None:
     return getattr(orig, "pgcode", None) or getattr(orig, "sqlstate", None)
 
 
+def _constraint_name(err: IntegrityError) -> str | None:
+    orig = getattr(err, "orig", None)
+    diag = getattr(orig, "diag", None)
+    return getattr(diag, "constraint_name", None) or getattr(
+        orig, "constraint_name", None
+    )
+
+
 class InvoiceService:
     def __init__(self, repository: InvoiceRepository) -> None:
         self.repository = repository
@@ -60,8 +68,14 @@ class InvoiceService:
             )
         return line
 
-    def _line_total_units(self, line: InvoiceLine) -> int:
-        return line.total_units or (line.box_size * line.quantity_boxes)
+    def _line_stock_quantity(self, line: InvoiceLine) -> int:
+        # In this system, `Inventory.stock` represents PACKAGES/BOXES for a given `box_size`.
+        return line.quantity_boxes
+
+    def _line_presentation_unit_cost(self, line: InvoiceLine) -> Decimal:
+        # Invoices send `price` as unit price (per inner unit). Convert to presentation cost.
+        # Example: a box of 12 units → unit price * 12.
+        return line.price * Decimal(str(line.box_size))
 
     def _compute_recent_avg_cost(
         self,
@@ -92,7 +106,7 @@ class InvoiceService:
             if not line.is_active or line.inventory_applied:
                 continue
 
-            quantity = self._line_total_units(line)
+            quantity = self._line_stock_quantity(line)
             if quantity <= 0:
                 continue
 
@@ -102,7 +116,7 @@ class InvoiceService:
                 box_size=line.box_size,
             )
 
-            unit_cost = line.price
+            unit_cost = self._line_presentation_unit_cost(line)
             if inventory is None:
                 inventory = Inventory(
                     stock=0,
@@ -165,7 +179,7 @@ class InvoiceService:
             if not line.is_active or not line.inventory_applied:
                 continue
 
-            quantity = self._line_total_units(line)
+            quantity = self._line_stock_quantity(line)
             if quantity <= 0:
                 continue
 
@@ -209,7 +223,7 @@ class InvoiceService:
                 event_type=InventoryEventType.INVOICE_UNRECEIVED,
                 movement_type=InventoryMovementType.OUT,
                 quantity=quantity,
-                unit_cost=line.price,
+                unit_cost=self._line_presentation_unit_cost(line),
                 prev_stock=prev_stock,
                 new_stock=new_stock,
                 inventory_id=inventory.id,
@@ -230,11 +244,13 @@ class InvoiceService:
         return self._get_invoice_or_404(invoice_id)
 
     def create_invoice(self, payload: InvoiceCreateWithLines) -> Invoice:
-        if payload.status != InvoiceStatus.DRAFT:
+        if payload.status not in {InvoiceStatus.DRAFT, InvoiceStatus.ARRIVED}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Invoice must be created in DRAFT status.",
+                detail="Invoice must be created in DRAFT or ARRIVED status.",
             )
+
+        session = self.repository.db
         invoice = Invoice(
             invoice_number=payload.invoice_number,
             sequence=payload.sequence,
@@ -262,14 +278,24 @@ class InvoiceService:
             )
 
         try:
-            self.repository.add(invoice)
+            with session.begin():
+                session.add(invoice)
+                session.flush()
+
+                if payload.status == InvoiceStatus.ARRIVED:
+                    self._apply_invoice_received(invoice)
         except IntegrityError as e:
             # Translate DB constraint errors to HTTP
             state = _sqlstate(e)
             if state == "23505":
+                constraint = _constraint_name(e)
+                if constraint == "uq_invoice_sequence":
+                    detail = "Invoice number or sequence already exists"
+                else:
+                    detail = "Unique constraint violated"
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Invoice number or sequence already exists",
+                    detail=detail,
                 )
             if state == "23503":
                 raise HTTPException(

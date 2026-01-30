@@ -10,6 +10,7 @@ from src.shared.enums.sale_enums import SaleStatus
 from src.shared.schemas.common_responses import (
     ProductLineResponse,
     WarehouseLineResponse,
+    ClientLineResponse,
 )
 
 
@@ -113,6 +114,7 @@ class SaleResponse(BaseModel):
     total_price: Decimal
     notes: Optional[str]
     client_id: int
+    client: Optional[ClientLineResponse] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

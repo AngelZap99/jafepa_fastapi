@@ -15,12 +15,22 @@ class InvoiceLineBase(BaseModel):
     product_id: int = Field(gt=0)
     box_size: int = Field(gt=0)
     quantity_boxes: int = Field(gt=0)
+    total_units: Optional[int] = Field(default=None, gt=0)
     price: Decimal = Field(gt=Decimal("0.00"))
 
 
 class InvoiceLineCreate(InvoiceLineBase):
     model_config = ConfigDict(extra="forbid")
-    pass
+
+    @model_validator(mode="after")
+    def validate_total_units(self):
+        if self.total_units is None:
+            return self
+
+        expected = self.box_size * self.quantity_boxes
+        if self.total_units != expected:
+            raise ValueError("total_units must equal box_size * quantity_boxes")
+        return self
 
 
 class InvoiceLineUpdate(BaseModel):
