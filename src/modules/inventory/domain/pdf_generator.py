@@ -267,7 +267,12 @@ class PDFGenerator:
 
         filename = os.path.join(os.getcwd(), f"catalogo_final_{uuid.uuid4()}.pdf")
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = p.chromium.launch(
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                ]
+            )
             page = browser.new_page()
             page.set_content(html)
             page.wait_for_timeout(1000)

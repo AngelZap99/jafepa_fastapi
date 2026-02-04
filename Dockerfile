@@ -17,6 +17,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright browser + system deps for PDF generation
+RUN python -m playwright install --with-deps chromium
+
 # Copy code (in dev we overwrite with a volume)
 COPY . .
 
