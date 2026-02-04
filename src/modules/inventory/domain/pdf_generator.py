@@ -70,8 +70,6 @@ class PDFGenerator:
         for chunk_index, chunk in enumerate(chunks):
             cards_html = ""
             for i, item in enumerate(chunk):
-                print("-------")
-                print(item.product.brand)
                 real_index = (chunk_index * items_per_page) + i + 1
                 img_src = self._image_to_base64(getattr(item.product, "image", None))
                 nombre = getattr(item.product, "name", "Producto")
@@ -127,7 +125,6 @@ class PDFGenerator:
                 <div class="header">
                     <div class="header-left">
                         <img src="{logo_base64}" alt="Logo" class="logo">
-                       <!-- <span class="company-name">JAFEPA</span>-->
                     </div>
                     <div class="header-right">
                         <div class="contact-info">
@@ -236,9 +233,8 @@ class PDFGenerator:
         </div>
         """
 
-        # Estilos específicos para la factura
+        # Estilos específicos para la factura (sin etiquetas <style>)
         invoice_styles = """
-<style>
     .invoice-header { padding: 10mm; background: #fff; }
     .header-main { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1A1A1A; padding-bottom: 5mm; margin-bottom: 5mm; }
     .invoice-logo { height: 20mm; }
@@ -264,8 +260,7 @@ class PDFGenerator:
     .summary-row.total { border-top: 2px solid #1A1A1A; font-weight: bold; font-size: 16px; margin-top: 2mm; }
     
     .invoice-footer { position: absolute; bottom: 0; width: 100%; text-align: center; font-family: 'Roboto', sans-serif; font-size: 10px; color: #777; padding-bottom: 5mm; }
-</style>
-        """
+"""
         
         return self._render_pdf(invoice_html, extra_styles=invoice_styles)
 
@@ -311,11 +306,6 @@ class PDFGenerator:
                     width: auto;
                     object-fit: contain;
                     border-radius: 4px;
-                }}
-                .company-name {{
-                    font-size: 24px;
-                    font-weight: 700;
-                    letter-spacing: 2px;
                 }}
                 .header-right {{
                     text-align: right;
@@ -380,6 +370,7 @@ class PDFGenerator:
                     position: absolute;
                     bottom: 0;
                 }}
+                {extra_styles}
             </style>
         </head>
         <body>
