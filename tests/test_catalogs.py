@@ -141,7 +141,9 @@ def test_client_catalog_endpoints_require_auth(client, auth_headers):
     assert deleted.json()["is_active"] is False
 
 
-def test_product_catalog_endpoints(client, catalog_seed):
+def test_product_catalog_endpoints(client, catalog_seed, db_session):
+    from src.shared.models.inventory.inventory_model import Inventory
+
     category_id = catalog_seed["category_id"]
     brand_id = catalog_seed["brand_id"]
     warehouse_id = catalog_seed["warehouse_id"]
@@ -167,6 +169,19 @@ def test_product_catalog_endpoints(client, catalog_seed):
     got = client.get(f"/api/products/{product_id}")
     assert got.status_code == 200, got.text
     assert got.json()["name"] == "Product Test"
+
+    db_session.add(
+        Inventory(
+            stock=5,
+            box_size=1,
+            avg_cost=1.0,
+            last_cost=1.0,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            is_active=True,
+        )
+    )
+    db_session.commit()
 
     updated = client.put(
         f"/api/products/update/{product_id}",
