@@ -70,8 +70,6 @@ class PDFGenerator:
         for chunk_index, chunk in enumerate(chunks):
             cards_html = ""
             for i, item in enumerate(chunk):
-                print("-------")
-                print(item.product.brand)
                 real_index = (chunk_index * items_per_page) + i + 1
                 img_src = self._image_to_base64(getattr(item.product, "image", None))
                 nombre = getattr(item.product, "name", "Producto")
@@ -127,7 +125,6 @@ class PDFGenerator:
                 <div class="header">
                     <div class="header-left">
                         <img src="{logo_base64}" alt="Logo" class="logo">
-                       <!-- <span class="company-name">JAFEPA</span>-->
                     </div>
                     <div class="header-right">
                         <div class="contact-info">
@@ -147,7 +144,127 @@ class PDFGenerator:
 
         return self._render_pdf(pages_html)
 
-    def _render_pdf(self, pages_html):
+    def generate_sale_invoice_pdf(self, sale):
+        """Genera un PDF de la factura de venta"""
+        logo_base64 = self._image_to_base64(self.logo_path)
+        
+        lines_html = ""
+        for line in sale.lines:
+            if not line.is_active:
+                continue
+            
+            product_name = "Producto"
+            product_code = "N/A"
+            if line.inventory and line.inventory.product:
+                product_name = line.inventory.product.name
+                product_code = line.inventory.product.code
+            
+            lines_html += f"""
+            <tr class="item-row">
+                <td class="col-code">{product_code}</td>
+                <td class="col-desc">{product_name}</td>
+                <td class="col-qty">{line.quantity_units}</td>
+                <td class="col-price">${line.price:,.2f}</td>
+                <td class="col-total">${line.total_price:,.2f}</td>
+            </tr>
+            """
+
+        client_name = sale.client.name if sale.client else "Público en General"
+        client_email = sale.client.email if sale.client else ""
+        client_phone = sale.client.phone if sale.client else ""
+
+        invoice_html = f"""
+        <div class="page">
+            <div class="invoice-header">
+                <div class="header-main">
+                    <img src="{logo_base64}" class="invoice-logo">
+                    <div class="invoice-title">FACTURA DE VENTA</div>
+                </div>
+                <div class="header-info">
+                    <div class="info-block">
+                        <strong>EMISOR</strong><br>
+                        JAFEPA S.A. de C.V.<br>
+                        Calle Falsa 123, Ciudad<br>
+                        RFC: JAF123456789<br>
+                        Tel: +52 55 1234 5678
+                    </div>
+                    <div class="info-block text-right">
+                        <strong>DETALLE</strong><br>
+                        Folio: #SAL-{sale.id:06d}<br>
+                        Fecha: {sale.sale_date}<br>
+                        Estado: {sale.status.value}<br>
+                    </div>
+                </div>
+            </div>
+
+            <div class="invoice-client">
+                <strong>CLIENTE</strong><br>
+                Nombre: {client_name}<br>
+                Email: {client_email}<br>
+                Tel: {client_phone}
+            </div>
+
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th class="col-code">CÓDIGO</th>
+                        <th class="col-desc">DESCRIPCIÓN</th>
+                        <th class="col-qty">CANT.</th>
+                        <th class="col-price">PRECIO UNIT.</th>
+                        <th class="col-total">TOTAL</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {lines_html}
+                </tbody>
+            </table>
+
+            <div class="invoice-summary">
+                <div class="summary-row total">
+                    <span>TOTAL:</span>
+                    <span>${sale.total_price:,.2f}</span>
+                </div>
+            </div>
+
+            <div class="invoice-footer">
+                <p>Gracias por su preferencia.</p>
+                <div class="footer-strip"></div>
+            </div>
+        </div>
+        """
+
+        # Estilos específicos para la factura (sin etiquetas <style>)
+        invoice_styles = """
+    .invoice-header { padding: 10mm; background: #fff; }
+    .header-main { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1A1A1A; padding-bottom: 5mm; margin-bottom: 5mm; }
+    .invoice-logo { height: 20mm; }
+    .invoice-title { font-family: 'Oswald', sans-serif; font-size: 28px; color: #1A1A1A; }
+    
+    .header-info { display: flex; justify-content: space-between; font-family: 'Roboto', sans-serif; font-size: 12px; line-height: 1.5; }
+    .text-right { text-align: right; }
+    
+    .invoice-client { margin: 5mm 10mm; padding: 5mm; background: #F5F5F5; border-radius: 4px; font-family: 'Roboto', sans-serif; font-size: 12px; }
+    
+    .invoice-table { width: calc(100% - 20mm); margin: 5mm 10mm; border-collapse: collapse; font-family: 'Roboto', sans-serif; }
+    .invoice-table th { background: #1A1A1A; color: #fff; padding: 3mm; font-size: 11px; text-align: left; }
+    .invoice-table td { padding: 3mm; border-bottom: 1px solid #EEE; font-size: 11px; }
+    
+    .col-code { width: 15%; }
+    .col-desc { width: 45%; }
+    .col-qty { width: 10%; text-align: center; }
+    .col-price { width: 15%; text-align: right; }
+    .col-total { width: 15%; text-align: right; }
+    
+    .invoice-summary { margin: 5mm 10mm; display: flex; justify-content: flex-end; }
+    .summary-row { width: 40%; display: flex; justify-content: space-between; padding: 2mm 0; font-family: 'Roboto', sans-serif; }
+    .summary-row.total { border-top: 2px solid #1A1A1A; font-weight: bold; font-size: 16px; margin-top: 2mm; }
+    
+    .invoice-footer { position: absolute; bottom: 0; width: 100%; text-align: center; font-family: 'Roboto', sans-serif; font-size: 10px; color: #777; padding-bottom: 5mm; }
+"""
+        
+        return self._render_pdf(invoice_html, extra_styles=invoice_styles)
+
+    def _render_pdf(self, pages_html, extra_styles=""):
         """Renderiza el HTML a PDF usando Playwright"""
         html = f"""
         <html>
@@ -188,11 +305,6 @@ class PDFGenerator:
                     width: auto;
                     object-fit: contain;
                     border-radius: 4px;
-                }}
-                .company-name {{
-                    font-size: 24px;
-                    font-weight: 700;
-                    letter-spacing: 2px;
                 }}
                 .header-right {{
                     text-align: right;
@@ -257,6 +369,7 @@ class PDFGenerator:
                     position: absolute;
                     bottom: 0;
                 }}
+                {extra_styles}
             </style>
         </head>
         <body>
