@@ -65,6 +65,17 @@ def get_sale(
     return sale_service.get_sale(sale_id)
 
 
+@router.get(
+    "/{sale_id}/invoice",
+    status_code=status.HTTP_200_OK,
+)
+def invoice_sale(
+    sale_id: int,
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.generate_invoice_pdf(sale_id)
+
+
 @router.post(
     "/create",
     response_model=SaleResponse,

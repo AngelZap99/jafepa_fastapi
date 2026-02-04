@@ -17,6 +17,8 @@ from src.shared.models.inventory_movement.inventory_movement_model import (
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.sale.sale_model import Sale
 from src.shared.models.sale_line.sale_line_model import SaleLine
+from fastapi.responses import FileResponse
+from src.modules.inventory.domain.pdf_generator import PDFGenerator
 from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
@@ -46,6 +48,7 @@ def _sqlstate(err: DBAPIError) -> str | None:
 class SaleService:
     def __init__(self, repository: SaleRepository) -> None:
         self.repository = repository
+        self._pdf_generator = PDFGenerator()
 
     def _get_sale_or_404(self, sale_id: int) -> Sale:
         sale = self.repository.get(sale_id)
@@ -567,4 +570,14 @@ class SaleService:
             ),
             rows=rows,
             sales=list(sales_map.values()),
+        )
+
+    def generate_invoice_pdf(self, sale_id: int):
+        """Genera el PDF de la factura para una venta específica"""
+        sale = self._get_sale_or_404(sale_id)
+        pdf_path = self._pdf_generator.generate_sale_invoice_pdf(sale)
+        return FileResponse(
+            pdf_path,
+            filename=f"factura_{sale_id}.pdf",
+            media_type="application/pdf",
         )
