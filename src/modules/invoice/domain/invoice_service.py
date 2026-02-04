@@ -72,11 +72,6 @@ class InvoiceService:
         # In this system, `Inventory.stock` represents PACKAGES/BOXES for a given `box_size`.
         return line.quantity_boxes
 
-    def _line_presentation_unit_cost(self, line: InvoiceLine) -> Decimal:
-        # Invoices send `price` as unit price (per inner unit). Convert to presentation cost.
-        # Example: a box of 12 units → unit price * 12.
-        return line.price * Decimal(str(line.box_size))
-
     def _compute_recent_avg_cost(
         self,
         movement_repository: InventoryMovementRepository,
@@ -116,7 +111,9 @@ class InvoiceService:
                 box_size=line.box_size,
             )
 
-            unit_cost = self._line_presentation_unit_cost(line)
+            # Pricing agreement: invoices send `price` as the unit cost per box/presentation,
+            # so the inventory unit_cost matches the line price (no multiplication by box_size).
+            unit_cost = line.price
             if inventory is None:
                 inventory = Inventory(
                     stock=0,
@@ -223,7 +220,7 @@ class InvoiceService:
                 event_type=InventoryEventType.INVOICE_UNRECEIVED,
                 movement_type=InventoryMovementType.OUT,
                 quantity=quantity,
-                unit_cost=self._line_presentation_unit_cost(line),
+                unit_cost=line.price,
                 prev_stock=prev_stock,
                 new_stock=new_stock,
                 inventory_id=inventory.id,

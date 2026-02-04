@@ -87,10 +87,13 @@ def list_products_with_stock(
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
 
-    q = (
-        session.query(Product)
-        .order_by(Product.id)
-    )
+    inv_base_q = session.query(Inventory).filter(Inventory.warehouse_id == warehouse_id)
+    if not include_inactive:
+        inv_base_q = inv_base_q.filter(Inventory.is_active == True)  # noqa: E712
+
+    product_ids_subq = inv_base_q.with_entities(Inventory.product_id).distinct().subquery()
+
+    q = session.query(Product).filter(Product.id.in_(product_ids_subq)).order_by(Product.id)
     if not include_inactive:
         q = q.filter(Product.is_active == True)  # noqa: E712
     if search:
@@ -102,12 +105,7 @@ def list_products_with_stock(
         return []
 
     product_ids = [p.id for p in products]
-    inv_q = session.query(Inventory).filter(
-        Inventory.warehouse_id == warehouse_id, Inventory.product_id.in_(product_ids)
-    )
-    if not include_inactive:
-        inv_q = inv_q.filter(Inventory.is_active == True)  # noqa: E712
-    inventories = inv_q.all()
+    inventories = inv_base_q.filter(Inventory.product_id.in_(product_ids)).all()
 
     inv_map: dict[int, list[Inventory]] = defaultdict(list)
     for inv in inventories:

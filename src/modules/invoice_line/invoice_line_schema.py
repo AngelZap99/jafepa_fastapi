@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from src.shared.schemas.common_responses import (
     ProductLineResponse,
@@ -64,3 +64,8 @@ class InvoiceLineResponse(BaseModel):
     updated_at: datetime
 
     product: Optional[ProductLineResponse] = None
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def total_price(self) -> Decimal:
+        return self.price * Decimal(self.quantity_boxes)
