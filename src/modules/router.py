@@ -11,6 +11,7 @@ from src.modules.invoice.invoice_router import router as invoice_router
 from src.modules.invoice_line.invoice_line_router import router as invoice_line_router
 from src.modules.inventory.inventory_router import router as inventory_router
 from src.modules.sale.sale_router import router as sale_router
+from src.modules.bff.bff_router import router as bff_router
 
 api_router = APIRouter()
 api_router.include_router(users_router)
@@ -24,3 +25,4 @@ api_router.include_router(invoice_router)
 api_router.include_router(invoice_line_router)
 api_router.include_router(inventory_router)
 api_router.include_router(sale_router)
+api_router.include_router(bff_router)
