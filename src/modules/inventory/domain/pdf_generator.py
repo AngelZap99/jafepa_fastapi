@@ -275,6 +275,7 @@ class PDFGenerator:
                 * {{ box-sizing: border-box; }}
                 @page {{ size: A4; margin: 0; }}
                 body {{ margin: 0; padding: 0; background-color: #FAFAFA; }}
+                {extra_styles}
                 
                 .page {{
                     width: 210mm;
