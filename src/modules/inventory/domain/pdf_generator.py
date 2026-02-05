@@ -1,4 +1,3 @@
-import uuid
 import os
 from datetime import datetime
 from playwright.sync_api import sync_playwright
@@ -379,7 +378,6 @@ class PDFGenerator:
         </html>
         """
 
-        filename = os.path.join(os.getcwd(), f"catalogo_final_{uuid.uuid4()}.pdf")
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 args=[
@@ -390,11 +388,10 @@ class PDFGenerator:
             page = browser.new_page()
             page.set_content(html)
             page.wait_for_timeout(1000)
-            page.pdf(
-                path=filename,
+            pdf_bytes = page.pdf(
                 format="A4",
                 print_background=True,
                 margin={"top": "0", "bottom": "0", "left": "0", "right": "0"}
             )
             browser.close()
-        return filename
+        return pdf_bytes
