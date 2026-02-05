@@ -22,9 +22,10 @@ Backend service for the JAFEPA platform built with FastAPI and SQLModel.
 
 ## 1. Overview
 
-- **Purpose**: Provide a modular API for the JAFEPA application (users/auth + catalog, inventory, invoices and sales).
-- **Architecture**: Service/repository pattern with centralized error handling via `src/shared/error_handler.py`.
-- **Entry point**: `main.py` wires dependencies, middlewares, handlers, and exposes routers through `api_router`.
+- **Purpose**: Provide a modular API for the JAFEPA application (users/auth + catalogs, products, inventory, invoices and sales).
+- **Architecture**: Service/repository pattern per module under `src/modules/*`.
+- **Entry point**: `main.py` wires DB, middlewares (CORS), and exposes routers through `api_router` at `/api`.
+- **BFF**: Aggregation endpoints live under `src/modules/bff/*` (e.g. system summary for dashboards).
 
 ## 2. Tech Stack
 
@@ -34,17 +35,19 @@ Backend service for the JAFEPA platform built with FastAPI and SQLModel.
 - **Database**: PostgreSQL (default) with connection pooling
 - **Validation**: Pydantic v2
 - **Security**: Password hashing using `passlib[bcrypt]` (auth module in progress)
+- **Documents**: Playwright + Chromium (PDF generation for inventory and sale invoices)
 
 ## 3. Project Structure
 
 ```text
-JAFEPA-backend/
+jafepa-fastapi/
 ├── main.py                      # FastAPI application instance
 ├── requirements.txt             # Python dependencies
 ├── docker-compose.yml           # Optional local services
 ├── src/
 │   ├── modules/
 │   │   ├── router.py            # Aggregates module routers into api_router
+│   │   ├── bff/                 # Backend-for-frontend aggregation endpoints
 │   │   └── users/
 │   │       ├── domain/
 │   │       │   ├── users_repository.py
@@ -53,7 +56,6 @@ JAFEPA-backend/
 │   │       └── users_schema.py
 │   └── shared/
 │       ├── database/            # Engine creation & dependencies
-│       ├── error_handler/       # Exception classes & handlers
 │       └── models/              # SQLModel models
 ├── .env.example                 # Sample environment configuration
 └── README.md
@@ -120,39 +122,37 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 ## 8. Docker Support
 
-### Run local in Dockers
+### Run with Docker Compose
 
 ```bash
-# Launch services defined in docker-compose.yml (e.g., PostgreSQL)
-# build postgres service
-docker-compose up -d --build postgres
-# build api service
-docker-compose up -d --build api
+# Build + run API + Postgres
+docker compose up -d --build
 
 # Stop services
-docker-compose down
-
-### !Important
-Set .env variable $DB_HOST=postgres
-# this is the docker's name service
+docker compose down
 ```
 
-### Run local
+**Important** (Compose): set `DB_HOST=postgres` in `.env` (service name in `docker-compose.yml`).
+
+### Run locally (without Docker)
 
 ```bash
-# Launch services defined in docker-compose.yml (e.g., PostgreSQL)
-# build postgres service
-docker-compose up -d --build postgres
+# Run only Postgres via Compose
+docker compose up -d --build postgres
 
 # Stop services
-docker-compose down
-
-### !Important
-Set .env variable $DB_HOST=localhost / $DB_HOST=127.0.0.1
-# this is the host of the postgres service
+docker compose down
 ```
 
-Update `docker-compose.yml` as additional services are introduced.
+**Important** (local DB): set `DB_HOST=localhost` (or `127.0.0.1`) in `.env`.
+
+### PDF generation notes
+
+- Inventory PDF and Sale invoice PDF use Playwright + Chromium.
+- If you run locally (outside Docker), you may need:
+  - `python -m playwright install chromium`
+- If you change the `Dockerfile`, rebuild the `api` image:
+  - `docker compose build --no-cache api`
 
 ## 9. Database Management
 
@@ -171,18 +171,37 @@ Update `docker-compose.yml` as additional services are introduced.
 ## 10. Linting & Formatting
 
 ```bash
-# Lint with Ruff
-ruff check .
+# Optional (install if needed)
+python -m pip install ruff black
 
-# Format with Black
+ruff check .
 black .
 ```
 
 Adopt additional tools (`isort`, `mypy`) as required by team standards.
 
+### Tests
+
+```bash
+pytest -q
+```
+
 ## 11. API Summary
 
 All module routes are mounted under the `/api` prefix in `main.py` (example: `GET /api/users/list`). Swagger/ReDoc include the full paths.
+
+### BFF (Dashboard / aggregations)
+
+- System summary: `GET /api/bff/system-summary?days=14`
+  - Catalog counts: products, clients, warehouses, users, categories, subcategories, brands
+  - Invoices:
+    - `pending`: all `DRAFT`
+    - `cancelled`: all `CANCELLED`
+    - `arrived_last_n_days`: only `ARRIVED` within the last `days` (uses `arrival_date` or falls back to `invoice_date`)
+  - Sales:
+    - `pending`: all `DRAFT`
+    - `cancelled`: all `CANCELLED`
+    - `paid_last_n_days`: only `PAID` within the last `days`
 
 ### Auth
 
@@ -214,6 +233,7 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
   - `POST /api/warehouses/create`
   - `PUT /api/warehouses/update/{warehouse_id}`
   - `DELETE /api/warehouses/delete/{warehouse_id}`
+  - Optional fields: `email`, `phone`
 
 - **Categories** (`src/modules/category/category_router.py`)
   - `GET /api/categories/list`
@@ -232,7 +252,8 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
 - **Products** (`src/modules/product/product_router.py`)
   - `GET /api/products/list`
   - `GET /api/products/{product_id}`
-  - `GET /api/products/list-stock?warehouse_id={warehouse_id}` (BFF for Sales: includes stock per product)
+  - `GET /api/products/list-stock?warehouse_id={warehouse_id}` (BFF for Sales UI)
+    - Optional query params: `search`, `only_in_stock`, `include_inactive`, `skip`, `limit`
   - `POST /api/products/create` (multipart/form-data, optional `image_file`)
   - `PUT /api/products/update/{product_id}` (multipart/form-data, optional `image_file`)
   - `DELETE /api/products/delete/{product_id}`
@@ -241,6 +262,9 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
   - `GET /api/invoices/list?skip=0&limit=100`
   - `GET /api/invoices/{invoice_id}`
   - `POST /api/invoices/create`
+    - Can be created in `DRAFT` or `ARRIVED`
+    - Inventory is applied immediately when created as `ARRIVED`
+    - Invoice line `price` is the unit price per box/presentation (line total = `price * quantity_boxes`)
   - `PUT /api/invoices/update/{invoice_id}`
   - `PUT /api/invoices/update-status/{invoice_id}`
   - `DELETE /api/invoices/delete/{invoice_id}`
@@ -250,6 +274,7 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
   - `POST /api/invoice-lines/create/{invoice_id}`
   - `PUT /api/invoice-lines/update/{invoice_id}/{line_id}`
   - `DELETE /api/invoice-lines/delete/{invoice_id}/{line_id}`
+  - Response includes `total_price` as a computed field: `price * quantity_boxes`
 
 - **Inventory** (`src/modules/inventory/inventory_router.py`)
   - `GET /api/inventory/list`
@@ -264,6 +289,7 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
   - `GET /api/sales/report` (requires `from_date` + `to_date`; optional filters)
   - `GET /api/sales/list?skip=0&limit=100`
   - `GET /api/sales/{sale_id}`
+  - `GET /api/sales/{sale_id}/invoice` (PDF)
   - `POST /api/sales/create`
   - `PUT /api/sales/update/{sale_id}`
   - `PUT /api/sales/update-status/{sale_id}`
@@ -283,6 +309,7 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
 - **Add business logic** in services (`users_service.py`).
 - **Expose endpoints** via routers and include them in `src/modules/router.py`.
 - **Document and test** updates; keep `.env.example` and README current.
+- For demo data, see `SEEDER.md` (`python3 -m src.shared.seed --help`).
 
 ## 13. Troubleshooting
 

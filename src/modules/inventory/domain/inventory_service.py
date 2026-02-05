@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Response
 
 from src.shared.models.inventory.inventory_model import Inventory
 from src.modules.inventory.inventory_schema import (
@@ -13,7 +13,7 @@ from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
 
-from fastapi.responses import FileResponse
+# from fastapi.responses import FileResponse
 from .pdf_generator import PDFGenerator
 
 
@@ -80,10 +80,14 @@ class InventoryService:
         # Llamamos a list_all y le pasamos filtros si vienen
         items = self.repository.list_all(filters=filters)
         
-        # Generar PDF con tu generador
-        pdf_path = self._pdf_generator.generate_inventory_pdf(items)
+        # Generar PDF con tu generador (ahora retorna bytes)
+        pdf_bytes = self._pdf_generator.generate_inventory_pdf(items)
 
-        return FileResponse(pdf_path, filename="inventory.pdf")
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="inventory.pdf"'},
+        )
 
     ####################
     # Movement history
