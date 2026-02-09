@@ -45,10 +45,47 @@ def _get_engine():
     return engine
 
 
-def _reset_db(*, yes: bool) -> None:
+def _prune_users_except_admin(*, engine) -> None:
+    """
+    Deletes all non-admin users, while keeping admin user(s).
+
+    Also nullifies self-referential audit fields (created_by/updated_by) that could
+    point to users being deleted.
+    """
+    with engine.begin() as conn:
+        admin_count = conn.execute(
+            text("SELECT COUNT(1) FROM users WHERE is_admin IS TRUE;")
+        ).scalar()
+        if not admin_count:
+            raise RuntimeError(
+                "Refusing to prune users: no admin user found (users.is_admin=TRUE)."
+            )
+
+        # Avoid FK issues inside `users` itself (created_by/updated_by -> users.id)
+        conn.execute(
+            text(
+                "UPDATE users SET created_by = NULL "
+                "WHERE created_by IS NOT NULL "
+                "AND created_by IN (SELECT id FROM users WHERE is_admin IS NOT TRUE);"
+            )
+        )
+        conn.execute(
+            text(
+                "UPDATE users SET updated_by = NULL "
+                "WHERE updated_by IS NOT NULL "
+                "AND updated_by IN (SELECT id FROM users WHERE is_admin IS NOT TRUE);"
+            )
+        )
+
+        result = conn.execute(text("DELETE FROM users WHERE is_admin IS NOT TRUE;"))
+        typer.echo(f"Pruned non-admin users: {result.rowcount or 0} deleted")
+
+
+def _reset_db(*, yes: bool, prune_users_except_admin: bool) -> None:
     if not yes:
         typer.echo(
-            "Refusing to reset without --yes (this resets BUSINESS tables only; users are kept)."
+            "Refusing to reset without --yes (resets BUSINESS tables; users are kept unless "
+            "--prune-users-except-admin is set)."
         )
         raise typer.Exit(code=2)
 
@@ -67,6 +104,8 @@ def _reset_db(*, yes: bool) -> None:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS pgcrypto;"))
             tables_sql = ", ".join(f"\"{name}\"" for name in BUSINESS_TABLE_NAMES_TRUNCATE_ORDER)
             conn.execute(text(f"TRUNCATE TABLE {tables_sql} RESTART IDENTITY CASCADE;"))
+        if prune_users_except_admin:
+            _prune_users_except_admin(engine=engine)
         return
 
     # Fallback for non-Postgres dialects
@@ -77,6 +116,8 @@ def _reset_db(*, yes: bool) -> None:
                 continue
             session.execute(table.delete())
         session.commit()
+    if prune_users_except_admin:
+        _prune_users_except_admin(engine=engine)
 
 
 @app.command("migrate-sales-approved-to-paid")
@@ -138,6 +179,10 @@ def seed(
         False,
         help="Reset BUSINESS tables only (keeps users) before seeding.",
     ),
+    prune_users_except_admin: bool = typer.Option(
+        False,
+        help="When used with --reset: also delete all non-admin users (keeps admin user(s)).",
+    ),
     yes: bool = typer.Option(False, help="Confirm destructive actions like --reset."),
     insert_mode: InsertMode = typer.Option(
         InsertMode.skip,
@@ -176,7 +221,7 @@ def seed(
         return
 
     if reset:
-        _reset_db(yes=yes)
+        _reset_db(yes=yes, prune_users_except_admin=prune_users_except_admin)
 
     engine = _get_engine()
     # Keep behavior consistent with app startup: auto-create tables if missing.

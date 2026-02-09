@@ -32,8 +32,20 @@ El flag `--reset --yes` **limpia únicamente tablas de negocio** (no borra `user
 python3 -m src.shared.seed --reset --yes
 ```
 
+## Reset (negocio + borrar usuarios no-admin)
+
+Si además necesitas dejar únicamente el/los usuarios admin, puedes combinar:
+
+```bash
+python3 -m src.shared.seed --reset --prune-users-except-admin --yes
+```
+
 Notas:
-- Si la tabla `users` no existe, el seeder puede **crear el schema** completo (incluida `users`), pero **nunca** hace TRUNCATE/DELETE de `users`.
+- Requiere que exista al menos un usuario con `users.is_admin = TRUE`; si no existe, el comando se rehúsa a borrar usuarios para evitar dejarte sin acceso.
+- Solo borra usuarios **no-admin**; el/los admin se conservan.
+
+Notas:
+- Si la tabla `users` no existe, el seeder puede **crear el schema** completo (incluida `users`). Por default **no** hace TRUNCATE/DELETE de `users` (salvo que uses `--prune-users-except-admin`).
 - En Postgres usa `TRUNCATE ... RESTART IDENTITY CASCADE` sobre tablas de negocio.
 
 ## Fases disponibles
