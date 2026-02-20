@@ -13,7 +13,7 @@ class InvoiceRepository:
         self.db = db
 
     def list(
-        self, skip: int = 0, limit: int = 100, include_inactive: bool = True
+        self, skip: int = 0, limit: Optional[int] = None, include_inactive: bool = True
     ) -> List[Invoice]:
         q = (
             self.db.query(Invoice)
@@ -27,7 +27,10 @@ class InvoiceRepository:
         if not include_inactive:
             q = q.filter(Invoice.is_active == True)  # noqa: E712
 
-        return q.offset(skip).limit(limit).all()
+        q = q.offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(self, invoice_id: int, include_inactive: bool = False) -> Optional[Invoice]:
         q = (

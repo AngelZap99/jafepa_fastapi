@@ -1,13 +1,13 @@
 from sqlalchemy.orm import Session, selectinload
 from src.shared.models.product.product_model import Product
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 class ProductRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, skip=0, limit=100):
-        return (
+    def list(self, skip: int = 0, limit: Optional[int] = None):
+        q = (
             self.db.query(Product)
             .options(
                 selectinload(Product.category),
@@ -15,9 +15,10 @@ class ProductRepository:
                 selectinload(Product.brand),
             )
             .offset(skip)
-            .limit(limit)
-            .all()
         )
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(self, product_id: int) -> Product | None:
         return (

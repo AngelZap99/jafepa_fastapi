@@ -21,13 +21,11 @@ class CategoryRepository:
             .first()
         )
 
-    def list(self, skip: int = 0, limit: int = 100) -> list[Category]:
-        return (
-            self.db.query(Category)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    def list(self, skip: int = 0, limit: int | None = None) -> list[Category]:
+        q = self.db.query(Category).offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def add(self, category: Category) -> Category:
         self.db.add(category)

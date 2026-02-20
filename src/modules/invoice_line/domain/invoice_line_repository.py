@@ -17,7 +17,7 @@ class InvoiceLineRepository:
         self,
         invoice_id: int,
         skip: int = 0,
-        limit: int = 100,
+        limit: int | None = None,
         include_inactive: bool = True,
     ) -> List[InvoiceLine]:
         q = (
@@ -30,7 +30,10 @@ class InvoiceLineRepository:
         if not include_inactive:
             q = q.filter(InvoiceLine.is_active == True)  # noqa: E712
 
-        return q.offset(skip).limit(limit).all()
+        q = q.offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(
         self,

@@ -46,7 +46,7 @@ class UserService:
     ####################
     # Public methods
     ####################
-    def list_users(self, skip: int = 0, limit: int = 100) -> List[User]:
+    def list_users(self, skip: int = 0, limit: int | None = None) -> List[User]:
         return self.repository.list(skip=skip, limit=limit)
 
     def get_user(self, user_id: int) -> User:

@@ -15,7 +15,7 @@ class SaleRepository:
         self.db = db
 
     def list(
-        self, skip: int = 0, limit: int = 100, include_inactive: bool = True
+        self, skip: int = 0, limit: Optional[int] = None, include_inactive: bool = True
     ) -> List[Sale]:
         q = (
             self.db.query(Sale)
@@ -34,7 +34,10 @@ class SaleRepository:
         if not include_inactive:
             q = q.filter(Sale.is_active == True)  # noqa: E712
 
-        return q.offset(skip).limit(limit).all()
+        q = q.offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(self, sale_id: int, include_inactive: bool = False) -> Optional[Sale]:
         q = (

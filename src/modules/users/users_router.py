@@ -1,5 +1,5 @@
 # src/modules/users/users_router.py
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 
 from src.shared.database.dependencies import SessionDep
 
@@ -33,9 +33,11 @@ def get_user_service(session: SessionDep) -> UserService:
     status_code=status.HTTP_200_OK,
 )
 def get_users(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     user_service: UserService = Depends(get_user_service),
 ):  # TODO: Implement pagination and optional search with filters
-    return user_service.list_users()
+    return user_service.list_users(skip=skip, limit=limit)
 
 
 @router.get(

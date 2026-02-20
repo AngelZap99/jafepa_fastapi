@@ -29,8 +29,10 @@ class UserRepository:
         statement = select(User).where(User.email == email)
         return self.session.exec(statement).first()
 
-    def list(self, skip: int = 0, limit: int = 100) -> List[User]:
-        statement = select(User).offset(skip).limit(limit)
+    def list(self, skip: int = 0, limit: int | None = None) -> List[User]:
+        statement = select(User).offset(skip)
+        if limit is not None:
+            statement = statement.limit(limit)
         return self.session.exec(statement).all()
 
     def add(self, user: User) -> User:

@@ -9,13 +9,11 @@ class ClientRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, skip=0, limit=100):
-        return (
-            self.db.query(Client)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    def list(self, skip: int = 0, limit: int | None = None):
+        q = self.db.query(Client).offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(self, client_id: int) -> Client | None:
         return self.db.query(Client).filter(Client.id == client_id).first()

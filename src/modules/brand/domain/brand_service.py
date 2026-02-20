@@ -30,7 +30,7 @@ class BrandService:
             )
         return brand
 
-    def list_brands(self, skip: int = 0, limit: int = 100) -> List[Brand]:
+    def list_brands(self, skip: int = 0, limit: int | None = None) -> List[Brand]:
         # By default, list should include inactive records too.
         return self.repository.list(skip=skip, limit=limit)
 

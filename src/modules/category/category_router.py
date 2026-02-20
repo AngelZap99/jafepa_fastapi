@@ -1,6 +1,6 @@
 # src/modules/category/categories_router.py
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 
 from src.shared.database.dependencies import SessionDep
 
@@ -32,9 +32,11 @@ def get_category_service(session: SessionDep) -> CategoryService:
     status_code=status.HTTP_200_OK,
 )
 def list_categories(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     category_service: CategoryService = Depends(get_category_service),
 ):
-    return category_service.list_categories()
+    return category_service.list_categories(skip=skip, limit=limit)
 
 
 @router.get(

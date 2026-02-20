@@ -41,7 +41,7 @@ class WarehouseService:
     ####################
     # Public methods
     ####################
-    def list_warehouses(self, skip: int = 0, limit: int = 100) -> List[Warehouse]:
+    def list_warehouses(self, skip: int = 0, limit: int | None = None) -> List[Warehouse]:
         return self.repository.list(skip=skip, limit=limit)
 
     def get_warehouse(self, warehouse_id: int) -> Warehouse:

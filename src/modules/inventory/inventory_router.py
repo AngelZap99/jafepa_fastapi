@@ -34,9 +34,11 @@ def get_inventory_service(session: SessionDep) -> InventoryService:
     status_code=status.HTTP_200_OK,
 )
 def list_inventory(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    return inventory_service.list_inventory()
+    return inventory_service.list_inventory(skip=skip, limit=limit)
 
 
 @router.get(
@@ -46,8 +48,8 @@ def list_inventory(
 )
 def list_inventory_movements(
     filters: InventoryMovementFilters = Depends(),
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
     return inventory_service.list_movements(filters=filters, skip=skip, limit=limit)

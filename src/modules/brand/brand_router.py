@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 
 from src.shared.database.dependencies import SessionDep
 
@@ -35,9 +35,11 @@ def get_brand_service(session: SessionDep) -> BrandService:
     status_code=status.HTTP_200_OK,
 )
 def list_brands(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     brand_service: BrandService = Depends(get_brand_service),
 ):
-    return brand_service.list_brands()
+    return brand_service.list_brands(skip=skip, limit=limit)
 
 
 @router.get(

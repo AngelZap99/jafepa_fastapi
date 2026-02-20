@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 
 from src.shared.database.dependencies import SessionDep
 
@@ -46,8 +46,8 @@ def get_sales_report(
     status_code=status.HTTP_200_OK,
 )
 def list_sales(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     sale_service: SaleService = Depends(get_sale_service),
 ):
     return sale_service.list_sales(skip=skip, limit=limit)

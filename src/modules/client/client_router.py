@@ -1,6 +1,6 @@
 # src/modules/clients/clients_router.py
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 
 from src.shared.database.dependencies import SessionDep
 
@@ -33,9 +33,11 @@ def get_client_service(session: SessionDep) -> ClientService:
     status_code=status.HTTP_200_OK,
 )
 def list_clients(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     client_service: ClientService = Depends(get_client_service),
 ):
-    return client_service.list_clients()
+    return client_service.list_clients(skip=skip, limit=limit)
 
 
 @router.get(

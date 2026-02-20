@@ -6,8 +6,11 @@ class BrandRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, skip: int = 0, limit: int = 100):
-        return self.db.query(Brand).offset(skip).limit(limit).all()
+    def list(self, skip: int = 0, limit: int | None = None):
+        q = self.db.query(Brand).offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(self, brand_id: int) -> Brand | None:
         return self.db.query(Brand).filter(Brand.id == brand_id).first()

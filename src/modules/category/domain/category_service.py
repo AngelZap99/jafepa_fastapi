@@ -40,7 +40,7 @@ class CategoryService:
                 detail=f"Category '{name}' already exists under this parent.",
             )
 
-    def list_categories(self, skip: int = 0, limit: int = 100) -> List[Category]:
+    def list_categories(self, skip: int = 0, limit: int | None = None) -> List[Category]:
         # By default, list should include inactive records too.
         return self.repository.list(skip=skip, limit=limit)
 

@@ -234,7 +234,7 @@ class InvoiceService:
 
             movement_sequence += 1
 
-    def list_invoices(self, skip: int = 0, limit: int = 100):
+    def list_invoices(self, skip: int = 0, limit: Optional[int] = None):
         return self.repository.list(skip=skip, limit=limit)
 
     def get_invoice(self, invoice_id: int):

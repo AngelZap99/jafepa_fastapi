@@ -46,7 +46,7 @@ class ProductService:
             make_public=True,
         )
 
-    def list_products(self, skip: int = 0, limit: int = 100) -> List[Product]:
+    def list_products(self, skip: int = 0, limit: Optional[int] = None) -> List[Product]:
         return self.repository.list(skip=skip, limit=limit)
 
     def get_product(self, product_id: int) -> Product:

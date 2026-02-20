@@ -39,7 +39,7 @@ class ClientService:
     ####################
     # Public methods
     ####################
-    def list_clients(self, skip: int = 0, limit: int = 100) -> List[Client]:
+    def list_clients(self, skip: int = 0, limit: int | None = None) -> List[Client]:
         return self.repository.list(skip=skip, limit=limit)
 
     def get_client(self, client_id: int) -> Client:

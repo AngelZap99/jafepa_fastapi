@@ -41,7 +41,7 @@ class InventoryMovementRepository:
     def list(
         self,
         skip: int = 0,
-        limit: int = 100,
+        limit: int | None = None,
         include_inactive: bool = False,
         inventory_id: int | None = None,
         product_id: int | None = None,
@@ -102,14 +102,12 @@ class InventoryMovementRepository:
         if sale_id is not None:
             q = q.join(SaleLine).filter(SaleLine.sale_id == sale_id)
 
-        return (
-            q.order_by(
-                InventoryMovement.movement_date.desc(), InventoryMovement.id.desc()
-            )
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+        q = q.order_by(
+            InventoryMovement.movement_date.desc(), InventoryMovement.id.desc()
+        ).offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get_recent_in_totals(
         self, inventory_id: int, months: int = 6

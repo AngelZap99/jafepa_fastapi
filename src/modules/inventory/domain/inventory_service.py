@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException, status, Response
 
 from src.shared.models.inventory.inventory_model import Inventory
@@ -38,7 +38,7 @@ class InventoryService:
     ####################
     # Public methods
     ####################
-    def list_inventory(self, skip: int = 0, limit: int = 100) -> List[Inventory]:
+    def list_inventory(self, skip: int = 0, limit: Optional[int] = None) -> List[Inventory]:
         return self.repository.list(skip=skip, limit=limit)
 
     def get_inventory(self, inventory_id: int) -> Inventory:
@@ -93,7 +93,7 @@ class InventoryService:
     # Movement history
     ####################
     def list_movements(
-        self, filters: InventoryMovementFilters, skip: int = 0, limit: int = 100
+        self, filters: InventoryMovementFilters, skip: int = 0, limit: Optional[int] = None
     ):
         movement_repository = InventoryMovementRepository(self.repository.db)
         return movement_repository.list(

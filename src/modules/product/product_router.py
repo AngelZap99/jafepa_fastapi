@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from src.shared.database.dependencies import SessionDep
@@ -27,8 +27,12 @@ def get_product_service(session: SessionDep) -> ProductService:
     return ProductService(repository)
 
 @router.get("/list", response_model=list[ProductResponse])
-def list_products(service: ProductService = Depends(get_product_service)):
-    return service.list_products()
+def list_products(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
+    service: ProductService = Depends(get_product_service),
+):
+    return service.list_products(skip=skip, limit=limit)
 
 @router.post("/create", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
@@ -76,8 +80,8 @@ def list_products_with_stock(
     search: str | None = None,
     only_in_stock: bool = False,
     include_inactive: bool = True,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
 ):
     """
     BFF endpoint for Sales UI:
@@ -100,7 +104,10 @@ def list_products_with_stock(
         s = f"%{search.strip()}%"
         q = q.filter((Product.name.ilike(s)) | (Product.code.ilike(s)))
 
-    products = q.offset(skip).limit(limit).all()
+    q = q.offset(skip)
+    if limit is not None:
+        q = q.limit(limit)
+    products = q.all()
     if not products:
         return []
 

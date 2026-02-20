@@ -10,8 +10,8 @@ class InventoryRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, skip=0, limit=100):
-        return (
+    def list(self, skip: int = 0, limit: int | None = None):
+        q = (
             self.db.query(Inventory)
             .options(
                 selectinload(Inventory.product).selectinload(Product.category),
@@ -20,9 +20,10 @@ class InventoryRepository:
                 selectinload(Inventory.warehouse),
             )
             .offset(skip)
-            .limit(limit)
-            .all()
         )
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
 
     def list_all(self, filters: dict = None):

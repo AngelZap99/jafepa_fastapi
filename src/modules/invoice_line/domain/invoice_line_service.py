@@ -26,7 +26,7 @@ class InvoiceLineService:
             )
         return line
 
-    def list_lines(self, invoice_id: int, skip: int = 0, limit: int = 100):
+    def list_lines(self, invoice_id: int, skip: int = 0, limit: int | None = None):
         return self.repository.list_by_invoice(
             invoice_id=invoice_id, skip=skip, limit=limit
         )

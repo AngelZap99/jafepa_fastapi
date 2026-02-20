@@ -1,6 +1,6 @@
 # src/modules/warehouse/warehouse_router.py
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 
 from src.shared.database.dependencies import SessionDep
 
@@ -33,9 +33,11 @@ def get_warehouse_service(session: SessionDep) -> WarehouseService:
     status_code=status.HTTP_200_OK,
 )
 def list_warehouses(
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1),
     warehouse_service: WarehouseService = Depends(get_warehouse_service),
 ):
-    return warehouse_service.list_warehouses()
+    return warehouse_service.list_warehouses(skip=skip, limit=limit)
 
 
 @router.get(

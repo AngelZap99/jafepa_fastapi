@@ -9,13 +9,11 @@ class WarehouseRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, skip=0, limit=100):
-        return (
-            self.db.query(Warehouse)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    def list(self, skip: int = 0, limit: int | None = None):
+        q = self.db.query(Warehouse).offset(skip)
+        if limit is not None:
+            q = q.limit(limit)
+        return q.all()
 
     def get(self, warehouse_id: int) -> Warehouse | None:
         return (

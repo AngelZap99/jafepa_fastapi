@@ -216,7 +216,7 @@ class SaleService:
 
             movement_sequence += 1
 
-    def list_sales(self, skip: int = 0, limit: int = 100):
+    def list_sales(self, skip: int = 0, limit: int | None = None):
         return self.repository.list(skip=skip, limit=limit)
 
     def get_sale(self, sale_id: int):
