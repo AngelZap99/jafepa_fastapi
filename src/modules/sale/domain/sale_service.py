@@ -287,47 +287,57 @@ class SaleService:
         session = self.repository.db
 
         try:
-            with session.begin():
-                # Lock only the `sale` row. Querying the ORM entity here can
-                # include eager outer joins (e.g., to `client`), and Postgres
-                # rejects `FOR UPDATE` on the nullable side of an outer join.
-                locked = (
-                    session.query(Sale.id)
-                    .filter(Sale.id == sale_id, Sale.is_active == True)  # noqa: E712
-                    .with_for_update()
-                    .first()
+            # Avoid `InvalidRequestError: A transaction is already begun on this Session.`
+            # A Session auto-begins a transaction on first DB interaction, so
+            # using `with session.begin()` breaks if the caller already ran a
+            # SELECT in the same session (e.g., seed scripts).
+            #
+            # This method is transactional and commits/rolls back explicitly to
+            # ensure row locks are released deterministically.
+
+            # Lock only the `sale` row. Querying the ORM entity here can include
+            # eager outer joins (e.g., to `client`), and Postgres rejects
+            # `FOR UPDATE` on the nullable side of an outer join.
+            locked = (
+                session.query(Sale.id)
+                .filter(Sale.id == sale_id, Sale.is_active == True)  # noqa: E712
+                .with_for_update()
+                .first()
+            )
+            if not locked:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found"
                 )
-                if not locked:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found"
-                    )
 
-                sale = self._get_sale_or_404(sale_id)
-                previous_status = sale.status
-                new_status = payload.status
+            sale = self._get_sale_or_404(sale_id)
+            previous_status = sale.status
+            new_status = payload.status
 
-                if previous_status == new_status:
-                    return sale
+            if previous_status == new_status:
+                session.commit()
+                return sale
 
-                allowed_transitions = {
-                    SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
-                    SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
-                    SaleStatus.CANCELLED: {SaleStatus.DRAFT},
-                }
-                if new_status not in allowed_transitions.get(previous_status, set()):
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Invalid status transition.",
-                    )
+            allowed_transitions = {
+                SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
+                SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
+                SaleStatus.CANCELLED: {SaleStatus.DRAFT},
+            }
+            if new_status not in allowed_transitions.get(previous_status, set()):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Invalid status transition.",
+                )
 
-                if new_status == SaleStatus.PAID:
-                    self._apply_sale_paid(sale)
-                elif previous_status == SaleStatus.PAID:
-                    self._apply_sale_unpaid(sale)
+            if new_status == SaleStatus.PAID:
+                self._apply_sale_paid(sale)
+            elif previous_status == SaleStatus.PAID:
+                self._apply_sale_unpaid(sale)
 
-                sale.status = new_status
-                session.add(sale)
+            sale.status = new_status
+            session.add(sale)
+            session.commit()
         except IntegrityError as e:
+            session.rollback()
             state = _sqlstate(e)
             if state in {"22P02", "23514"} and "PAID" in str(getattr(e, "orig", e)):
                 raise HTTPException(
@@ -342,7 +352,11 @@ class SaleService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Integrity constraint violated while updating sale status.",
             )
+        except HTTPException:
+            session.rollback()
+            raise
         except DBAPIError as e:
+            session.rollback()
             state = _sqlstate(e)
             if state in {"22P02", "23514"} and "PAID" in str(getattr(e, "orig", e)):
                 raise HTTPException(
@@ -357,6 +371,9 @@ class SaleService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Database error while updating sale status. Check server logs.",
             )
+        except Exception:
+            session.rollback()
+            raise
 
         return self._get_sale_or_404(sale_id)
 

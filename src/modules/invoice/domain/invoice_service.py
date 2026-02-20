@@ -275,13 +275,19 @@ class InvoiceService:
             )
 
         try:
-            with session.begin():
-                session.add(invoice)
-                session.flush()
+            # Avoid `InvalidRequestError: A transaction is already begun on this Session.`
+            # SQLAlchemy sessions auto-begin a transaction on first DB interaction,
+            # so using `with session.begin()` here breaks if the caller already
+            # executed a SELECT in the same session (e.g., seed scripts).
+            session.add(invoice)
+            session.flush()
 
-                if payload.status == InvoiceStatus.ARRIVED:
-                    self._apply_invoice_received(invoice)
+            if payload.status == InvoiceStatus.ARRIVED:
+                self._apply_invoice_received(invoice)
+
+            session.commit()
         except IntegrityError as e:
+            session.rollback()
             # Translate DB constraint errors to HTTP
             state = _sqlstate(e)
             if state == "23505":
@@ -303,6 +309,9 @@ class InvoiceService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Integrity constraint violated",
             )
+        except Exception:
+            session.rollback()
+            raise
 
         # Re-fetch with relationships eagerly loaded
         return self.repository.get(invoice.id, include_inactive=True)  # type: ignore[return-value]

@@ -44,6 +44,20 @@ Notas:
 - Requiere que exista al menos un usuario con `users.is_admin = TRUE`; si no existe, el comando se rehúsa a borrar usuarios para evitar dejarte sin acceso.
 - Solo borra usuarios **no-admin**; el/los admin se conservan.
 
+## Solo reset (sin reinsertar datos demo)
+
+Si lo que quieres es dejar todo **vacío** (tablas de negocio limpias) sin volver a sembrar datos demo:
+
+```bash
+python3 -m src.shared.seed --reset-only --yes
+```
+
+Y si además quieres quedarte solo con el usuario admin:
+
+```bash
+python3 -m src.shared.seed --reset-only --prune-users-except-admin --yes
+```
+
 Notas:
 - Si la tabla `users` no existe, el seeder puede **crear el schema** completo (incluida `users`). Por default **no** hace TRUNCATE/DELETE de `users` (salvo que uses `--prune-users-except-admin`).
 - En Postgres usa `TRUNCATE ... RESTART IDENTITY CASCADE` sobre tablas de negocio.

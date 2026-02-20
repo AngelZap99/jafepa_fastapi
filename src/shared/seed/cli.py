@@ -179,6 +179,11 @@ def seed(
         False,
         help="Reset BUSINESS tables only (keeps users) before seeding.",
     ),
+    reset_only: bool = typer.Option(
+        False,
+        "--reset-only/--no-reset-only",
+        help="Reset BUSINESS tables (and optionally prune users) then exit without seeding.",
+    ),
     prune_users_except_admin: bool = typer.Option(
         False,
         help="When used with --reset: also delete all non-admin users (keeps admin user(s)).",
@@ -220,8 +225,11 @@ def seed(
     if ctx.invoked_subcommand is not None:
         return
 
-    if reset:
+    if reset or reset_only:
         _reset_db(yes=yes, prune_users_except_admin=prune_users_except_admin)
+        if reset_only:
+            typer.echo("Reset complete (no seeding performed).")
+            return
 
     engine = _get_engine()
     # Keep behavior consistent with app startup: auto-create tables if missing.
