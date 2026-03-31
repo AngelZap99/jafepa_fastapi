@@ -38,8 +38,13 @@ class InventoryService:
     ####################
     # Public methods
     ####################
-    def list_inventory(self, skip: int = 0, limit: Optional[int] = None) -> List[Inventory]:
-        return self.repository.list(skip=skip, limit=limit)
+    def list_inventory(
+        self,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        filters: dict | None = None,
+    ) -> List[Inventory]:
+        return self.repository.list(skip=skip, limit=limit, filters=filters)
 
     def get_inventory(self, inventory_id: int) -> Inventory:
         return self._get_inventory_or_404(inventory_id)
@@ -79,9 +84,13 @@ class InventoryService:
     def generate_all_inventory_pdf(self, filters: dict = None):
         # Llamamos a list_all y le pasamos filtros si vienen
         items = self.repository.list_all(filters=filters)
+        report_warehouse = self.repository.get_report_warehouse(filters=filters, items=items)
         
         # Generar PDF con tu generador (ahora retorna bytes)
-        pdf_bytes = self._pdf_generator.generate_inventory_pdf(items)
+        pdf_bytes = self._pdf_generator.generate_inventory_pdf(
+            items,
+            warehouse=report_warehouse,
+        )
 
         return Response(
             content=pdf_bytes,

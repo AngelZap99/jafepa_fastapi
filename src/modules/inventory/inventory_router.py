@@ -34,11 +34,13 @@ def get_inventory_service(session: SessionDep) -> InventoryService:
     status_code=status.HTTP_200_OK,
 )
 def list_inventory(
+    almacen: Optional[str] = Query(None, description="Filtra por almacén"),
     skip: int = Query(default=0, ge=0),
     limit: int | None = Query(default=None, ge=1),
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    return inventory_service.list_inventory(skip=skip, limit=limit)
+    filters = {"almacen": almacen} if almacen is not None else None
+    return inventory_service.list_inventory(skip=skip, limit=limit, filters=filters)
 
 
 @router.get(
@@ -117,6 +119,7 @@ def generate_all_inventory_pdf(
     categoria: Optional[str] = Query(None, description="Filtra por categoría"),
     subcategoria: Optional[str] = Query(None, description="Filtra por subcategoría"),
     marca: Optional[str] = Query(None, description="Filtra por marca"),
+    almacen: Optional[str] = Query(None, description="Filtra por almacén"),
     buscar: Optional[str] = Query(None, description="Buscar por nombre o código"),
     ids: Optional[List[int]] = Query(None, description="IDs de inventario seleccionados"),
     inventory_service: InventoryService = Depends(get_inventory_service)
@@ -126,6 +129,7 @@ def generate_all_inventory_pdf(
         "categoria": categoria,
         "subcategoria": subcategoria,
         "marca": marca,
+        "almacen": almacen,
         "buscar": buscar,
         "ids": ids
     }

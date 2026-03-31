@@ -3,6 +3,14 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright
 import requests
 import base64
+from html import escape
+
+
+def _display_value(value, fallback="No disponible"):
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    return text if text else fallback
 
 class PDFGenerator:
 
@@ -54,7 +62,7 @@ class PDFGenerator:
                     encoded = base64.b64encode(content).decode("utf-8")
                     return f"data:image/{ext};base64,{encoded}"
 
-    def generate_inventory_pdf(self, items):
+    def generate_inventory_pdf(self, items, warehouse=None):
         """Genera un PDF del inventario con los productos"""
         if not items:
             return self._render_pdf('<div class="empty">No hay stock disponible.</div>')
@@ -65,6 +73,12 @@ class PDFGenerator:
 
         # Logo en Base64
         logo_base64 = self._image_to_base64(self.logo_path)
+        warehouse_name = escape(
+            _display_value(getattr(warehouse, "name", None), "Reporte de inventario")
+        )
+        warehouse_address = escape(_display_value(getattr(warehouse, "address", None)))
+        warehouse_phone = escape(_display_value(getattr(warehouse, "phone", None)))
+        warehouse_email = escape(_display_value(getattr(warehouse, "email", None)))
 
         for chunk_index, chunk in enumerate(chunks):
             cards_html = ""
@@ -127,10 +141,10 @@ class PDFGenerator:
                     </div>
                     <div class="header-right">
                         <div class="contact-info">
-                            <div>📍 Calle Falsa 123, Ciudad</div>
-                            <div>📞 +52 55 1234 5678</div>
-                            <div>✉️ contacto@miempresa.com</div>
-                            <div>🌐 www.miempresa.com</div>
+                            <div><strong>{warehouse_name}</strong></div>
+                            <div>Direccion: {warehouse_address}</div>
+                            <div>Telefono: {warehouse_phone}</div>
+                            <div>Email: {warehouse_email}</div>
                         </div>
                     </div>
                 </div>
