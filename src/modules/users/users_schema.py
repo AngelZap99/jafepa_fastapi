@@ -2,6 +2,11 @@ from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 from src.modules.users.users_mixins import PasswordValidationMixin
+from src.shared.models.user.user_roles import (
+    DEFAULT_ADMIN_ROLE,
+    DEFAULT_USER_ROLE,
+    UserRole,
+)
 
 
 ##### BASE
@@ -9,6 +14,7 @@ class UserBase(BaseModel):
     first_name: str = Field(min_length=2, max_length=30)
     last_name: str = Field(min_length=2, max_length=30)
     email: EmailStr = Field(min_length=5, max_length=50)
+    role: UserRole
 
     @field_validator("email", mode="before")
     @classmethod
@@ -21,11 +27,11 @@ class UserBase(BaseModel):
 
 ##### INPUTS
 class UserCreateAdmin(UserBase, PasswordValidationMixin):
-    pass
+    role: UserRole = Field(default=DEFAULT_ADMIN_ROLE)
 
 
 class UserCreate(UserBase, PasswordValidationMixin):
-    pass
+    role: UserRole = Field(default=DEFAULT_USER_ROLE)
 
 
 class UserUpdate(BaseModel):
@@ -33,6 +39,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = None
     email: Optional[EmailStr] = None
     password: Optional[SecretStr] = None
+    role: Optional[UserRole] = None
 
     @field_validator("email", mode="before")
     @classmethod

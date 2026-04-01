@@ -1,6 +1,7 @@
 from sqlmodel import Field, UniqueConstraint
 
 from src.shared.models.base_model import MyBaseModel
+from src.shared.models.user.user_roles import DEFAULT_USER_ROLE
 
 
 class User(MyBaseModel, table=True):
@@ -14,6 +15,7 @@ class User(MyBaseModel, table=True):
     # Authentication information
     email: str = Field(max_length=50, nullable=False, index=True)
     password: str = Field(max_length=255, nullable=False)
+    role: str = Field(default=DEFAULT_USER_ROLE.value, max_length=20, nullable=False)
 
     # Status information
     is_active: bool = Field(default=True)

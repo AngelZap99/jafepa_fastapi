@@ -27,6 +27,11 @@ def test_login_success_returns_tokens(client):
     assert data["token_type"] == "bearer"
     assert isinstance(data["access_token"], str) and data["access_token"]
     assert isinstance(data["refresh_token"], str) and data["refresh_token"]
+    assert data["user"]["email"] == email
+    assert data["user"]["first_name"] == "Test"
+    assert data["user"]["last_name"] == "User"
+    assert data["user"]["role"] == "Vendedor"
+    assert data["user"]["is_active"] is True
 
 
 def test_login_invalid_password_fails(client):
@@ -52,6 +57,7 @@ def test_users_me_requires_token_and_returns_user(client):
     login = _login(client, email, password)
     assert login.status_code == 200, login.text
     access = login.json()["access_token"]
+    assert login.json()["user"]["email"] == email
 
     me = client.get("/api/users/me", headers={"Authorization": f"Bearer {access}"})
     assert me.status_code == 200, me.text

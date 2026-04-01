@@ -8,7 +8,7 @@ from src.shared.auth.jwt_auth import (
     create_refresh_token,
     decode_token,
 )
-from src.modules.auth.auth_dto import LoginRequest, TokenPairResponse
+from src.modules.auth.auth_dto import LoginRequest, LoginResponse, TokenPairResponse
 
 from src.modules.users.domain.users_repository import UserRepository
 from src.shared.models.user.user_model import User
@@ -53,7 +53,7 @@ class AuthService:
     ####################
     # Public methods
     ####################
-    def login(self, payload: LoginRequest) -> TokenPairResponse:
+    def login(self, payload: LoginRequest) -> LoginResponse:
         user = self._authenticate_user(
             email=payload.email,
             password=payload.password.get_secret_value(),
@@ -63,9 +63,10 @@ class AuthService:
         access_token = create_access_token(subject)
         refresh_token = create_refresh_token(subject)
 
-        return TokenPairResponse(
+        return LoginResponse(
             access_token=access_token,
             refresh_token=refresh_token,
+            user=user,
         )
 
     def refresh_tokens(self, refresh_token: str) -> TokenPairResponse:

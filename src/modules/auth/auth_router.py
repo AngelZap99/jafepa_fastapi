@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.shared.database.dependencies import SessionDep
 from src.modules.auth.auth_dto import (
     LoginRequest,
-    TokenPairResponse,
+    LoginResponse,
     RefreshTokenRequest,
+    TokenPairResponse,
 )
 from src.modules.auth.domain.auth_service import AuthService
 from src.modules.users.domain.users_repository import UserRepository
@@ -24,7 +25,7 @@ def get_auth_service(session: SessionDep) -> AuthService:
 
 @router.post(
     "/login",
-    response_model=TokenPairResponse,
+    response_model=LoginResponse,
     status_code=status.HTTP_200_OK,
 )
 def login(

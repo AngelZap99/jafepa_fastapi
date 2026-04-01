@@ -8,6 +8,7 @@ from src.modules.users.users_schema import (
     UserCreate,
     UserCreateAdmin,
     UserUpdate,
+    UserUpdateStatus,
     UserResponse,
 )
 from src.modules.users.domain.users_service import UserService
@@ -96,6 +97,19 @@ def update_user(
     user_service: UserService = Depends(get_user_service),
 ):
     return user_service.update_user(user_id, payload)
+
+
+@router.patch(
+    "/status/{user_id}",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_user_status(
+    user_id: int,
+    payload: UserUpdateStatus,
+    user_service: UserService = Depends(get_user_service),
+):
+    return user_service.update_user_status(user_id, payload)
 
 
 @router.delete(

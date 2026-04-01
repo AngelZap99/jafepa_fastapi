@@ -1,16 +1,24 @@
 # src/modules/users/users_service.py
 
+import logging
 from typing import List
 
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
 
 from src.shared.models.user.user_model import User
-from src.modules.users.users_schema import UserCreate, UserCreateAdmin, UserUpdate
+from src.shared.models.user.user_roles import DEFAULT_ADMIN_ROLE
+from src.modules.users.users_schema import (
+    UserCreate,
+    UserCreateAdmin,
+    UserUpdate,
+    UserUpdateStatus,
+)
 from src.modules.users.domain.users_repository import UserRepository
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
 
 
 def hash_password(raw_password: str) -> str:
@@ -43,6 +51,23 @@ class UserService:
             )
         return user
 
+    def _set_user_status(self, user_id: int, is_active: bool, source: str) -> User:
+        user = self._get_user_or_404(user_id)
+        previous_status = user.is_active
+        user.is_active = is_active
+        updated_user = self.repository.update(user)
+
+        action = "activated" if updated_user.is_active else "deactivated"
+        logger.warning(
+            "User %s was %s via %s. previous_is_active=%s current_is_active=%s",
+            updated_user.id,
+            action,
+            source,
+            previous_status,
+            updated_user.is_active,
+        )
+        return updated_user
+
     ####################
     # Public methods
     ####################
@@ -62,6 +87,7 @@ class UserService:
             last_name=payload.last_name,
             email=payload.email,
             password=hashed_password,
+            role=payload.role.value,
             is_admin=False,
             is_active=True,
             is_verified=True,
@@ -84,6 +110,7 @@ class UserService:
             last_name=payload.last_name,
             email=payload.email,
             password=hashed_password,
+            role=payload.role.value if payload.role else DEFAULT_ADMIN_ROLE.value,
             is_admin=True,
             is_active=True,
             is_verified=True,
@@ -101,10 +128,20 @@ class UserService:
         if "password" in data and data["password"] is not None:
             data["password"] = hash_password(data["password"].get_secret_value())
 
+        if "role" in data and data["role"] is not None:
+            data["role"] = data["role"].value
+
         for field, value in data.items():
             setattr(user, field, value)
 
         return self.repository.update(user)
+
+    def update_user_status(self, user_id: int, payload: UserUpdateStatus) -> User:
+        return self._set_user_status(
+            user_id=user_id,
+            is_active=payload.is_active,
+            source="status endpoint",
+        )
 
     def delete_user(self, user_id: int) -> User:
         user = self._get_user_or_404(user_id)
