@@ -16,8 +16,10 @@ class ClientService:
         self.repository = repository
 
     def _ensure_email_not_taken(
-        self, email: str, client_owner_id: int | None = None
+        self, email: str | None, client_owner_id: int | None = None
     ) -> None:
+        if not email:
+            return
         existing = self.repository.get_by_email(email)
 
         # Si existe otro cliente con ese email → error

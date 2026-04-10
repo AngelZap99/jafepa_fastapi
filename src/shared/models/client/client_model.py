@@ -12,5 +12,5 @@ class Client(MyBaseModel, table=True):
     __tablename__ = "client"
 
     name: str = Field(max_length=250)
-    email: str = Field(max_length=50, unique=True)
+    email: Optional[str] = Field(default=None, max_length=50, unique=True)
     phone: Optional[str] = Field(default=None, max_length=13)

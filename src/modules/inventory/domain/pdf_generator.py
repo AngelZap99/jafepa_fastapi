@@ -166,8 +166,8 @@ class PDFGenerator:
             """
 
         client_name = sale.client.name if sale.client else "Público en General"
-        client_email = sale.client.email if sale.client else ""
-        client_phone = sale.client.phone if sale.client else ""
+        client_email = sale.client.email if sale.client and sale.client.email else ""
+        client_phone = sale.client.phone if sale.client and sale.client.phone else ""
 
         invoice_html = f"""
         <div class="page">

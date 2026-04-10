@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 ##### BASE
 class ClientBase(BaseModel):
     name: str = Field(min_length=2, max_length=250)
-    email: EmailStr = Field(min_length=5, max_length=50)
+    email: Optional[EmailStr] = Field(default=None, min_length=5, max_length=50)
     phone: Optional[str] = Field(default=None, max_length=13, min_length=7)
 
     @field_validator("email", mode="before")
@@ -15,7 +15,16 @@ class ClientBase(BaseModel):
         """Normalize email: strip + lowercase."""
         if value is None:
             return value
-        return str(value).strip().lower()
+        text = str(value).strip().lower()
+        return None if not text else text
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, value):
+        if value is None:
+            return value
+        text = str(value).strip()
+        return None if not text else text
 
 
 ##### INPUTS
@@ -34,7 +43,16 @@ class ClientUpdate(BaseModel):
     def normalize_email(cls, value):
         if value is None:
             return value
-        return str(value).strip().lower()
+        text = str(value).strip().lower()
+        return None if not text else text
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, value):
+        if value is None:
+            return value
+        text = str(value).strip()
+        return None if not text else text
 
 ##### OUTPUTS
 class ClientResponse(ClientBase):

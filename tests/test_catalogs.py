@@ -141,6 +141,32 @@ def test_client_catalog_endpoints_require_auth(client, auth_headers):
     assert deleted.json()["is_active"] is False
 
 
+def test_client_create_allows_optional_email_and_phone(client, auth_headers):
+    created = client.post(
+        "/api/clients/create",
+        headers=auth_headers,
+        json={"name": "Cliente Sin Contacto"},
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert data["name"] == "Cliente Sin Contacto"
+    assert data["email"] is None
+    assert data["phone"] is None
+
+
+def test_client_create_normalizes_blank_email_and_phone_to_null(client, auth_headers):
+    created = client.post(
+        "/api/clients/create",
+        headers=auth_headers,
+        json={"name": "Cliente Vacío", "email": "", "phone": ""},
+    )
+    assert created.status_code == 201, created.text
+    data = created.json()
+    assert data["name"] == "Cliente Vacío"
+    assert data["email"] is None
+    assert data["phone"] is None
+
+
 def test_product_catalog_endpoints(client, catalog_seed, db_session):
     from src.shared.models.inventory.inventory_model import Inventory
 
