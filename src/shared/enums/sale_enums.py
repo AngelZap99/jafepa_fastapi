@@ -12,3 +12,8 @@ class SaleStatus(str, Enum):
         if isinstance(value, str) and value.upper() == "APPROVED":
             return cls.PAID
         return None
+
+
+class SaleLinePriceType(str, Enum):
+    UNIT = "UNIT"
+    BOX = "BOX"

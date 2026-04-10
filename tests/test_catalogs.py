@@ -218,7 +218,13 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
 
     stock = client.get(f"/api/products/list-stock?warehouse_id={warehouse_id}")
     assert stock.status_code == 200, stock.text
-    assert any(p["id"] == product_id for p in stock.json())
+    product_stock = next((p for p in stock.json() if p["id"] == product_id), None)
+    assert product_stock is not None
+    assert product_stock["stock_total"] == 5
+    assert product_stock["stock_boxes_total"] == 5
+    assert product_stock["inventory"][0]["available_boxes"] == 5
+    assert product_stock["inventory"][0]["sales_last_price"] is None
+    assert product_stock["inventory"][0]["sales_avg_price"] is None
 
     deleted = client.delete(f"/api/products/delete/{product_id}")
     assert deleted.status_code == 200, deleted.text

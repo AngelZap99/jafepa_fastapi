@@ -24,7 +24,7 @@ class ProductLineResponse(BaseModel):
 class ClientLineResponse(BaseModel):
     id: int
     name: str
-    email: str
+    email: str | None = None
     phone: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

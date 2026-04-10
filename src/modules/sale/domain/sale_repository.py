@@ -59,32 +59,41 @@ class SaleRepository:
 
         return q.first()
 
-    def add(self, sale: Sale) -> Sale:
+    def add(self, sale: Sale, commit: bool = True) -> Sale:
         self.db.add(sale)
-        self.db.commit()
-        self.db.refresh(sale)
+        if commit:
+            self.db.commit()
+            self.db.refresh(sale)
         return sale
 
-    def update(self, sale: Sale) -> Sale:
+    def update(self, sale: Sale, commit: bool = True) -> Sale:
         self.db.add(sale)
-        self.db.commit()
-        self.db.refresh(sale)
+        if commit:
+            self.db.commit()
+            self.db.refresh(sale)
         return sale
 
-    def soft_delete(self, sale: Sale) -> Sale:
+    def soft_delete(self, sale: Sale, commit: bool = True) -> Sale:
         sale.is_active = False
         for line in sale.lines:
             line.is_active = False
         self.db.add(sale)
-        self.db.commit()
-        self.db.refresh(sale)
+        if commit:
+            self.db.commit()
+            self.db.refresh(sale)
         return sale
 
-    def add_line(self, sale: Sale, line: SaleLine) -> SaleLine:
+    def add_line(self, sale: Sale, line: SaleLine, commit: bool = True) -> SaleLine:
         line.sale_id = sale.id
+        if line not in sale.lines:
+            sale.lines.append(line)
         self.db.add(line)
-        self.db.commit()
-        self.db.refresh(line)
+        if commit:
+            self.db.commit()
+            self.db.refresh(line)
+        else:
+            self.db.flush()
+            self.db.refresh(line)
         return line
 
     def get_line(
@@ -92,7 +101,11 @@ class SaleRepository:
     ) -> Optional[SaleLine]:
         q = (
             self.db.query(SaleLine)
-            .options(selectinload(SaleLine.inventory))
+            .options(
+                selectinload(SaleLine.inventory),
+                selectinload(SaleLine.inventory).selectinload(Inventory.product),
+                selectinload(SaleLine.inventory).selectinload(Inventory.warehouse),
+            )
             .filter(SaleLine.id == line_id, SaleLine.sale_id == sale_id)
         )
 
@@ -101,17 +114,25 @@ class SaleRepository:
 
         return q.first()
 
-    def update_line(self, line: SaleLine) -> SaleLine:
+    def update_line(self, line: SaleLine, commit: bool = True) -> SaleLine:
         self.db.add(line)
-        self.db.commit()
-        self.db.refresh(line)
+        if commit:
+            self.db.commit()
+            self.db.refresh(line)
+        else:
+            self.db.flush()
+            self.db.refresh(line)
         return line
 
-    def soft_delete_line(self, line: SaleLine) -> SaleLine:
+    def soft_delete_line(self, line: SaleLine, commit: bool = True) -> SaleLine:
         line.is_active = False
         self.db.add(line)
-        self.db.commit()
-        self.db.refresh(line)
+        if commit:
+            self.db.commit()
+            self.db.refresh(line)
+        else:
+            self.db.flush()
+            self.db.refresh(line)
         return line
 
     def list_lines_for_report(

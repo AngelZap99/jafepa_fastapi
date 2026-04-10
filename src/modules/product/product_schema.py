@@ -155,11 +155,15 @@ class InventoryStockItem(BaseModel):
     product_id: int
     box_size: int
     stock: int
+    available_boxes: int = 0
     avg_cost: float
     last_cost: float
+    sales_last_price: Optional[float] = None
+    sales_avg_price: Optional[float] = None
     is_active: bool
 
 
 class ProductStockResponse(ProductResponse):
     stock_total: int = 0
+    stock_boxes_total: int = 0
     inventory: list[InventoryStockItem] = Field(default_factory=list)

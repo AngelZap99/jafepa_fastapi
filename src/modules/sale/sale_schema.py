@@ -4,9 +4,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
-from src.shared.enums.sale_enums import SaleStatus
+from src.shared.enums.sale_enums import SaleLinePriceType, SaleStatus
 from src.shared.schemas.common_responses import (
     ProductLineResponse,
     WarehouseLineResponse,
@@ -16,8 +16,12 @@ from src.shared.schemas.common_responses import (
 
 class SaleLineBase(BaseModel):
     inventory_id: int = Field(gt=0)
-    quantity_units: int = Field(gt=0)
+    quantity_boxes: int = Field(
+        gt=0,
+        validation_alias=AliasChoices("quantity_boxes", "quantity_units"),
+    )
     price: Decimal = Field(gt=Decimal("0.00"))
+    price_type: SaleLinePriceType = Field(default=SaleLinePriceType.BOX)
 
 
 class SaleLineCreate(SaleLineBase):
@@ -29,8 +33,13 @@ class SaleLineUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     inventory_id: Optional[int] = Field(default=None, gt=0)
-    quantity_units: Optional[int] = Field(default=None, gt=0)
+    quantity_boxes: Optional[int] = Field(
+        default=None,
+        gt=0,
+        validation_alias=AliasChoices("quantity_boxes", "quantity_units"),
+    )
     price: Optional[Decimal] = Field(default=None, gt=Decimal("0.00"))
+    price_type: Optional[SaleLinePriceType] = None
 
     @model_validator(mode="after")
     def at_least_one_field(self):
@@ -45,9 +54,15 @@ class SaleLineResponse(BaseModel):
     id: int
     sale_id: int
     inventory_id: int
-    quantity_units: int
+    quantity_boxes: int
+    box_size: int
     price: Decimal
+    price_type: SaleLinePriceType
+    unit_price: Decimal
+    box_price: Decimal
     total_price: Decimal
+    product_code: Optional[str] = None
+    product_name: Optional[str] = None
     inventory_applied: bool
     is_active: bool
     created_at: datetime
@@ -137,7 +152,7 @@ class SaleReportFilters(BaseModel):
 
 class SaleReportTotals(BaseModel):
     sales_count: int
-    total_units: int
+    total_boxes: int
     total_amount: Decimal
 
 
@@ -145,7 +160,7 @@ class SaleReportRow(BaseModel):
     group_by: str
     group_id: int
     group_label: str
-    total_units: int
+    total_boxes: int
     total_amount: Decimal
 
 
@@ -154,9 +169,15 @@ class SaleReportSaleLine(BaseModel):
 
     id: int
     inventory_id: int
-    quantity_units: int
+    quantity_boxes: int
+    box_size: int
     price: Decimal
+    price_type: SaleLinePriceType
+    unit_price: Decimal
+    box_price: Decimal
     total_price: Decimal
+    product_code: Optional[str] = None
+    product_name: Optional[str] = None
     inventory: Optional[SaleLineInventoryRef] = None
 
 
@@ -165,7 +186,7 @@ class SaleReportClientRef(BaseModel):
 
     id: int
     name: str
-    email: str
+    email: Optional[str] = None
 
 
 class SaleReportSaleDetail(BaseModel):

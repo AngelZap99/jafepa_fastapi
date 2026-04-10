@@ -14,6 +14,9 @@ from src.modules.product.domain.product_repository import ProductRepository
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.product.product_model import Product
 from src.shared.models.warehouse.warehouse_model import Warehouse
+from src.modules.inventory.domain.inventory_movement_repository import (
+    InventoryMovementRepository,
+)
 
 from collections import defaultdict
 
@@ -113,6 +116,8 @@ def list_products_with_stock(
 
     product_ids = [p.id for p in products]
     inventories = inv_base_q.filter(Inventory.product_id.in_(product_ids)).all()
+    movement_repo = InventoryMovementRepository(session)
+    metrics_window_months = 12
 
     inv_map: dict[int, list[Inventory]] = defaultdict(list)
     for inv in inventories:
@@ -122,18 +127,44 @@ def list_products_with_stock(
     for product in products:
         inv_items = inv_map.get(product.id, [])
         stock_total = sum(i.stock for i in inv_items if include_inactive or i.is_active)
-        if only_in_stock and stock_total <= 0:
+        stock_boxes_total = stock_total
+        if only_in_stock and stock_boxes_total <= 0:
             continue
 
         base = ProductResponse.model_validate(product, from_attributes=True)
+        inventory_payload = []
+        for inv in inv_items:
+            if not include_inactive and not inv.is_active:
+                continue
+
+            available_boxes = inv.stock
+            recent_qty, recent_cost = movement_repo.get_recent_out_totals(
+                inv.id, months=metrics_window_months
+            )
+            sales_avg_price = (
+                float(recent_cost / recent_qty) if recent_qty > 0 else None
+            )
+            sales_last_price = movement_repo.get_latest_out_unit_cost(
+                inv.id, months=metrics_window_months
+            )
+            item_data = InventoryStockItem.model_validate(inv, from_attributes=True).model_dump()
+            item_data.update(
+                {
+                    "available_boxes": available_boxes,
+                    "sales_last_price": float(sales_last_price)
+                    if sales_last_price is not None
+                    else None,
+                    "sales_avg_price": sales_avg_price,
+                }
+            )
+            inventory_payload.append(InventoryStockItem(**item_data))
+
         out.append(
             ProductStockResponse(
                 **base.model_dump(),
                 stock_total=stock_total,
-                inventory=[
-                    InventoryStockItem.model_validate(i, from_attributes=True)
-                    for i in inv_items
-                ],
+                stock_boxes_total=stock_boxes_total,
+                inventory=inventory_payload,
             )
         )
 

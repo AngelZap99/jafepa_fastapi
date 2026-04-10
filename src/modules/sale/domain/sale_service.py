@@ -10,7 +10,7 @@ from src.shared.enums.inventory_enums import (
     InventoryMovementType,
     InventorySourceType,
 )
-from src.shared.enums.sale_enums import SaleStatus
+from src.shared.enums.sale_enums import SaleLinePriceType, SaleStatus
 from src.shared.models.inventory_movement.inventory_movement_model import (
     InventoryMovement,
 )
@@ -45,9 +45,15 @@ def _sqlstate(err: DBAPIError) -> str | None:
 
 
 class SaleService:
+    _MONEY_QUANT = Decimal("0.01")
+
     def __init__(self, repository: SaleRepository) -> None:
         self.repository = repository
         self._pdf_generator = PDFGenerator()
+
+    @staticmethod
+    def _money(value: Decimal | int | float | str) -> Decimal:
+        return Decimal(str(value)).quantize(SaleService._MONEY_QUANT)
 
     def _get_sale_or_404(self, sale_id: int) -> Sale:
         sale = self.repository.get(sale_id)
@@ -74,15 +80,62 @@ class SaleService:
             )
         return inventory
 
-    def _ensure_stock_available(self, inventory: Inventory, quantity: int) -> None:
-        if inventory.stock < quantity:
+    def _available_boxes(self, inventory: Inventory) -> int:
+        return int(inventory.stock)
+
+    def _ensure_stock_available(self, inventory: Inventory, quantity_boxes: int) -> None:
+        if self._available_boxes(inventory) < quantity_boxes:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Insufficient stock for sale line",
+                detail="Insufficient stock in boxes for sale line",
             )
 
+    def _normalize_sale_price(
+        self,
+        *,
+        price: Decimal,
+        price_type: SaleLinePriceType,
+        box_size: int,
+    ) -> tuple[Decimal, Decimal]:
+        box_size = max(int(box_size or 1), 1)
+        if price_type == SaleLinePriceType.UNIT:
+            unit_price = self._money(price)
+            box_price = self._money(unit_price * Decimal(box_size))
+        else:
+            box_price = self._money(price)
+            unit_price = self._money(box_price / Decimal(box_size))
+        return unit_price, box_price
+
     def _line_total(self, line: SaleLine) -> Decimal:
-        return Decimal(line.quantity_units) * line.price
+        quantity_boxes = self._sale_line_quantity_boxes(line)
+        return Decimal(quantity_boxes) * line.price
+
+    def _line_snapshot_values(
+        self,
+        inventory: Inventory,
+        *,
+        quantity_boxes: int,
+        price: Decimal,
+        price_type: SaleLinePriceType,
+    ) -> dict[str, object]:
+        box_size = int(inventory.box_size or 1)
+        unit_price, box_price = self._normalize_sale_price(
+            price=price,
+            price_type=price_type,
+            box_size=box_size,
+        )
+        product = inventory.product
+        return {
+            "quantity_units": quantity_boxes,
+            "box_size": box_size,
+            "price_type": price_type,
+            "price": box_price,
+            "unit_price": unit_price,
+            "box_price": box_price,
+            "total_price": self._money(Decimal(quantity_boxes) * box_price),
+            "product_code": product.code if product else None,
+            "product_name": product.name if product else None,
+        }
 
     def _recalculate_sale_total(self, sale: Sale) -> None:
         total = Decimal("0.00")
@@ -90,6 +143,20 @@ class SaleService:
             if line.is_active:
                 total += line.total_price
         sale.total_price = total
+
+    def _sale_line_quantity_boxes(self, line: SaleLine) -> int:
+        return int(getattr(line, "quantity_boxes", line.quantity_units))
+
+    def _apply_paid_sale_delta(self, sale: Sale, mutator) -> None:
+        paid = sale.status == SaleStatus.PAID
+        if paid:
+            self._apply_sale_unpaid(sale)
+
+        mutator()
+        self._recalculate_sale_total(sale)
+
+        if paid:
+            self._apply_sale_paid(sale)
 
     def _apply_sale_paid(self, sale: Sale) -> None:
         session = self.repository.db
@@ -125,7 +192,7 @@ class SaleService:
                     detail="Inventory record not found for sale line",
                 )
 
-            quantity = line.quantity_units
+            quantity = self._sale_line_quantity_boxes(line)
             prev_stock = inventory.stock
             new_stock = prev_stock - quantity
             if new_stock < 0:
@@ -190,7 +257,7 @@ class SaleService:
                     detail="Inventory record not found for sale line",
                 )
 
-            quantity = line.quantity_units
+            quantity = self._sale_line_quantity_boxes(line)
             prev_stock = inventory.stock
             new_stock = prev_stock + quantity
 
@@ -238,14 +305,25 @@ class SaleService:
 
         for l in payload.lines:
             inventory = self._get_inventory_or_404(l.inventory_id)
-            self._ensure_stock_available(inventory, l.quantity_units)
-            total_price = Decimal(l.quantity_units) * l.price
+            self._ensure_stock_available(inventory, l.quantity_boxes)
+            line_values = self._line_snapshot_values(
+                inventory,
+                quantity_boxes=l.quantity_boxes,
+                price=l.price,
+                price_type=l.price_type,
+            )
             sale.lines.append(
                 SaleLine(
                     inventory_id=l.inventory_id,
-                    quantity_units=l.quantity_units,
-                    price=l.price,
-                    total_price=total_price,
+                    quantity_units=line_values["quantity_units"],
+                    box_size=line_values["box_size"],
+                    price=line_values["price"],
+                    price_type=line_values["price_type"],
+                    unit_price=line_values["unit_price"],
+                    box_price=line_values["box_price"],
+                    total_price=line_values["total_price"],
+                    product_code=line_values["product_code"],
+                    product_name=line_values["product_name"],
                 )
             )
 
@@ -263,11 +341,6 @@ class SaleService:
 
     def update_sale(self, sale_id: int, payload: SaleUpdate) -> Sale:
         sale = self._get_sale_or_404(sale_id)
-        if sale.status == SaleStatus.PAID:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify a PAID sale. Revert status first.",
-            )
 
         data = payload.model_dump(exclude_unset=True)
         for field, value in data.items():
@@ -388,93 +461,162 @@ class SaleService:
         return self.repository.get(sale_id, include_inactive=True)  # type: ignore[return-value]
 
     def add_sale_line(self, sale_id: int, payload: SaleLineCreate) -> SaleLine:
+        session = self.repository.db
         sale = self._get_sale_or_404(sale_id)
-        if sale.status == SaleStatus.PAID:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of a PAID sale. Revert status first.",
-            )
-
-        for existing in sale.lines:
-            if existing.is_active and existing.inventory_id == payload.inventory_id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Duplicate inventory_id in sale lines is not allowed",
-                )
-
-        inventory = self._get_inventory_or_404(payload.inventory_id)
-        self._ensure_stock_available(inventory, payload.quantity_units)
-
-        total_price = Decimal(payload.quantity_units) * payload.price
-        line = SaleLine(
-            inventory_id=payload.inventory_id,
-            quantity_units=payload.quantity_units,
-            price=payload.price,
-            total_price=total_price,
-        )
+        created_line: SaleLine | None = None
 
         try:
-            line = self.repository.add_line(sale, line)
+            def mutate() -> SaleLine:
+                nonlocal created_line
+                for existing in sale.lines:
+                    if existing.is_active and existing.inventory_id == payload.inventory_id:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Duplicate inventory_id in sale lines is not allowed",
+                        )
+
+                inventory = self._get_inventory_or_404(payload.inventory_id)
+                self._ensure_stock_available(inventory, payload.quantity_boxes)
+                line_values = self._line_snapshot_values(
+                    inventory,
+                    quantity_boxes=payload.quantity_boxes,
+                    price=payload.price,
+                    price_type=payload.price_type,
+                )
+                line = SaleLine(
+                    inventory_id=payload.inventory_id,
+                    quantity_units=line_values["quantity_units"],
+                    box_size=line_values["box_size"],
+                    price=line_values["price"],
+                    price_type=line_values["price_type"],
+                    unit_price=line_values["unit_price"],
+                    box_price=line_values["box_price"],
+                    total_price=line_values["total_price"],
+                    product_code=line_values["product_code"],
+                    product_name=line_values["product_name"],
+                )
+                created_line = self.repository.add_line(sale, line, commit=False)
+                return created_line
+
+            self._apply_paid_sale_delta(sale, mutate)
+            self.repository.update(sale, commit=False)
+            session.commit()
         except IntegrityError:
+            session.rollback()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Invalid inventory reference",
             )
+        except HTTPException:
+            session.rollback()
+            raise
+        except Exception:
+            session.rollback()
+            raise
 
-        self._recalculate_sale_total(sale)
-        self.repository.update(sale)
-        return line
+        if created_line is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create sale line",
+            )
+        return created_line
 
     def update_sale_line(
         self, sale_id: int, line_id: int, payload: SaleLineUpdate
     ) -> SaleLine:
+        session = self.repository.db
         line = self._get_line_or_404(sale_id, line_id)
-        if line.sale and line.sale.status == SaleStatus.PAID:
+        sale = line.sale or self._get_sale_or_404(sale_id)
+
+        try:
+            data = payload.model_dump(exclude_unset=True)
+
+            def mutate() -> None:
+                if "inventory_id" in data and sale:
+                    for existing in sale.lines:
+                        if (
+                            existing.is_active
+                            and existing.id != line.id
+                            and existing.inventory_id == data["inventory_id"]
+                        ):
+                            raise HTTPException(
+                                status_code=status.HTTP_409_CONFLICT,
+                                detail="Duplicate inventory_id in sale lines is not allowed",
+                            )
+
+                next_inventory_id = data.get("inventory_id", line.inventory_id)
+                inventory = self._get_inventory_or_404(next_inventory_id)
+
+                next_quantity_boxes = data.get(
+                    "quantity_boxes",
+                    self._sale_line_quantity_boxes(line),
+                )
+                next_price_type = data.get("price_type", line.price_type)
+                next_price = data.get("price", line.price)
+                self._ensure_stock_available(inventory, int(next_quantity_boxes))
+                line_values = self._line_snapshot_values(
+                    inventory,
+                    quantity_boxes=int(next_quantity_boxes),
+                    price=next_price,
+                    price_type=next_price_type,
+                )
+
+                for field, value in data.items():
+                    if field == "quantity_boxes":
+                        setattr(line, "quantity_units", int(value))
+                    else:
+                        setattr(line, field, value)
+
+                line.inventory_id = inventory.id
+                line.quantity_units = int(line_values["quantity_units"])
+                line.box_size = int(line_values["box_size"])
+                line.price = line_values["price"]
+                line.price_type = line_values["price_type"]
+                line.unit_price = line_values["unit_price"]
+                line.box_price = line_values["box_price"]
+                line.total_price = line_values["total_price"]
+                line.product_code = line_values["product_code"]
+                line.product_name = line_values["product_name"]
+
+                self.repository.update_line(line, commit=False)
+
+            self._apply_paid_sale_delta(sale, mutate)
+            self.repository.update(sale, commit=False)
+            session.commit()
+        except HTTPException:
+            session.rollback()
+            raise
+        except IntegrityError:
+            session.rollback()
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of a PAID sale. Revert status first.",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid inventory reference",
             )
+        except Exception:
+            session.rollback()
+            raise
 
-        data = payload.model_dump(exclude_unset=True)
-        if "inventory_id" in data and line.sale:
-            for existing in line.sale.lines:
-                if (
-                    existing.is_active
-                    and existing.id != line.id
-                    and existing.inventory_id == data["inventory_id"]
-                ):
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Duplicate inventory_id in sale lines is not allowed",
-                    )
-        for field, value in data.items():
-            setattr(line, field, value)
-
-        if "quantity_units" in data or "price" in data:
-            line.total_price = self._line_total(line)
-
-        if "inventory_id" in data or "quantity_units" in data:
-            inventory = self._get_inventory_or_404(line.inventory_id)
-            self._ensure_stock_available(inventory, line.quantity_units)
-
-        line = self.repository.update_line(line)
-        if line.sale:
-            self._recalculate_sale_total(line.sale)
-            self.repository.update(line.sale)
         return line
 
     def delete_sale_line(self, sale_id: int, line_id: int) -> SaleLine:
+        session = self.repository.db
         line = self._get_line_or_404(sale_id, line_id)
-        if line.sale and line.sale.status == SaleStatus.PAID:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of a PAID sale. Revert status first.",
-            )
+        sale = line.sale or self._get_sale_or_404(sale_id)
 
-        line = self.repository.soft_delete_line(line)
-        if line.sale:
-            self._recalculate_sale_total(line.sale)
-            self.repository.update(line.sale)
+        try:
+            def mutate() -> None:
+                self.repository.soft_delete_line(line, commit=False)
+
+            self._apply_paid_sale_delta(sale, mutate)
+            self.repository.update(sale, commit=False)
+            session.commit()
+        except HTTPException:
+            session.rollback()
+            raise
+        except Exception:
+            session.rollback()
+            raise
+
         return line
 
     def get_sales_report(self, filters: SaleReportFilters) -> SaleReportResponse:
@@ -488,7 +630,7 @@ class SaleService:
             inventory_id=filters.inventory_id,
         )
 
-        totals_units = 0
+        totals_boxes = 0
         totals_amount = Decimal("0.00")
         sale_ids = set()
 
@@ -499,7 +641,7 @@ class SaleService:
                 continue
 
             sale_ids.add(sale.id)
-            totals_units += line.quantity_units
+            totals_boxes += self._sale_line_quantity_boxes(line)
             totals_amount += line.total_price
 
             if sale.id not in sales_map:
@@ -516,9 +658,18 @@ class SaleService:
                 SaleReportSaleLine(
                     id=line.id,
                     inventory_id=line.inventory_id,
-                    quantity_units=line.quantity_units,
+                    quantity_boxes=self._sale_line_quantity_boxes(line),
+                    box_size=int(
+                        getattr(line, "box_size", None)
+                        or (line.inventory.box_size if line.inventory else 1)
+                    ),
                     price=line.price,
+                    price_type=line.price_type,
+                    unit_price=line.unit_price,
+                    box_price=line.box_price,
                     total_price=line.total_price,
+                    product_code=getattr(line, "product_code", None),
+                    product_name=getattr(line, "product_name", None),
                     inventory=line.inventory,
                 )
             )
@@ -555,7 +706,7 @@ class SaleService:
                 key = (group_id, group_label)
                 if key not in grouped:
                     grouped[key] = {"units": 0, "amount": Decimal("0.00")}
-                grouped[key]["units"] = int(grouped[key]["units"]) + line.quantity_units
+                grouped[key]["units"] = int(grouped[key]["units"]) + self._sale_line_quantity_boxes(line)
                 grouped[key]["amount"] = Decimal(grouped[key]["amount"]) + line.total_price
 
             for (group_id, group_label), data in grouped.items():
@@ -564,7 +715,7 @@ class SaleService:
                         group_by=filters.group_by,
                         group_id=group_id,
                         group_label=group_label,
-                        total_units=int(data["units"]),
+                        total_boxes=int(data["units"]),
                         total_amount=Decimal(data["amount"]),
                     )
                 )
@@ -581,7 +732,7 @@ class SaleService:
             },
             totals=SaleReportTotals(
                 sales_count=len(sale_ids),
-                total_units=totals_units,
+                total_boxes=totals_boxes,
                 total_amount=totals_amount,
             ),
             rows=rows,
