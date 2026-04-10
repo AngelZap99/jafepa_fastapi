@@ -340,6 +340,7 @@ def test_pdf_generator_uses_real_warehouse_header_instead_of_generic_placeholder
 
     def fake_render_pdf(pages_html, extra_styles=""):
         captured["pages_html"] = pages_html
+        captured["extra_styles"] = extra_styles
         return b"%PDF-1.4 header"
 
     monkeypatch.setattr(generator, "_render_pdf", fake_render_pdf, raising=True)
@@ -374,9 +375,23 @@ def test_pdf_generator_uses_real_warehouse_header_instead_of_generic_placeholder
     assert "central@example.com" in html
     assert "Calle Falsa 123, Ciudad" not in html
     assert "contacto@miempresa.com" not in html
+    assert "Producto 01" not in html
+    assert "Producto 02" not in html
     assert "Stock" not in html
     assert "AVG Cost" not in html
     assert "Last Cost" not in html
+    assert "Bocina RINO" in html
+    assert "Código" in html
+    assert "BR-10" in html
+    assert "Piezas por caja" in html
+    assert "2" in html
+    assert "Descripción" in html
+    assert "info-row-description" in html
+    assert "product-description" in html
+    assert 'class="product-name"' in html
+    assert 'class="image-container"' in html
+    assert html.index("Bocina RINO") < html.index('class="image-container"')
+    assert html.index('class="image-container"') < html.index("Código")
 
 
 def test_pdf_generator_uses_nine_products_per_page(monkeypatch):

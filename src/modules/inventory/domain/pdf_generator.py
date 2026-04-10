@@ -83,25 +83,34 @@ class PDFGenerator:
         for chunk_index, chunk in enumerate(chunks):
             cards_html = ""
             for i, item in enumerate(chunk):
-                real_index = (chunk_index * items_per_page) + i + 1
                 img_src = self._image_to_base64(getattr(item.product, "image", None))
                 nombre = escape(_display_value(getattr(item.product, "name", None), "Producto"))
                 code = escape(_display_value(getattr(item.product, "code", None), "Producto"))
+                description = escape(
+                    _display_value(getattr(item.product, "description", None), "Sin descripcion")
+                )
+                box_size = escape(
+                    _display_value(getattr(item, "box_size", None), "0")
+                )
                 
                 cards_html += f"""
                 <div class="product-card">
-                    <div class="product-badge">Producto {real_index:02d}</div>
+                    <div class="product-name">{nombre}</div>
                     <div class="image-container">
-                        <img src="{img_src}"/>
+                        <img src="{img_src}" alt="{nombre}"/>
                     </div>
                     <div class="info-table">
                         <div class="info-row">
-                            <span class="label">Nombre</span>
-                            <span class="value">{nombre[:28]}</span>
-                        </div>
-                        <div class="info-row">
                             <span class="label">Código</span>
                             <span class="value">{code}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Piezas por caja</span>
+                            <span class="value">{box_size}</span>
+                        </div>
+                        <div class="info-row info-row-description">
+                            <span class="label">Descripción</span>
+                            <span class="value product-description">{description}</span>
                         </div>
                     </div>
                 </div>
@@ -316,45 +325,82 @@ class PDFGenerator:
                     height: 74mm;
                     border: 1px solid #E0E0E0;
                     border-radius: 10px;
-                    padding: 7mm 4mm 4mm 4mm;
+                    padding: 4mm 4mm 5mm 4mm;
                     position: relative;
                     background: #FAFAFA;
                     font-size: 12px;
                 }}
 
-                .product-badge {{
-                    background-color: #1A1A1A;
-                    color: #FAFAFA;
-                    padding: 2px 15px;
-                    border-radius: 12px;
-                    font-size: 10px;
-                    position: absolute;
-                    top: -10px; left: 50%;
-                    transform: translateX(-50%);
-                    font-weight: bold;
+                .product-name {{
+                    font-family: 'Oswald', sans-serif;
+                    font-size: 12px;
+                    font-weight: 500;
+                    text-align: center;
+                    color: #111111;
+                    margin: -6.8mm auto 2.5mm auto;
+                    display: block;
+                    width: 85%;
+                    padding: 0.8mm 4mm;
+                    border: 1px solid #1A1A1A;
+                    border-radius: 999px;
+                    background: #FFFFFF;
+                    min-height: 5mm;
+                    line-height: 1.1;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    letter-spacing: 0.3px;
                 }}
 
                 .image-container {{
-                    width: 100%; height: 42mm;
+                    width: 100%;
+                    height: 38mm;
                     display: flex; align-items: center; justify-content: center;
-                    margin-bottom: 3mm;
+                    margin-bottom: 2.5mm;
                 }}
-                .image-container img {{ max-height: 100%; max-width: 100%; object-fit: contain; }}
+                .image-container img {{
+                    max-height: 100%;
+                    max-width: 100%;
+                    object-fit: contain;
+                    border-radius: 8px;
+                }}
 
-                .info-table {{ width: 100%; font-size: 11px; }}
+                .info-table {{
+                    width: 100%;
+                    font-size: 11px;
+                    font-family: 'Roboto', sans-serif;
+                }}
                 .info-row {{
                     display: flex; justify-content: space-between; align-items: center;
-                    padding: 6px 0; border-bottom: 0.5px solid #eee;
+                    padding: 6px 0;
                 }}
-                .label {{ color: #777; }}
-                .value {{ font-weight: 700; color: #333; text-align: right; }}
+                .info-row-description {{
+                    align-items: flex-start;
+                }}
+                .label {{
+                    color: #777;
+                    font-family: 'Roboto', sans-serif;
+                }}
+                .value {{
+                    font-weight: 700;
+                    color: #333;
+                    text-align: right;
+                    font-family: 'Roboto', sans-serif;
+                }}
+                .product-description {{
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                    text-align: left;
+                    max-height: 6.2em;
+                    line-height: 1.25em;
+                    white-space: normal;
+                    margin-left: 2mm;
+                }}
 
-                .footer-strip {{
-                    background-color: #1A1A1A;
-                    height: 1mm;
-                    width: 100%;
-                    position: absolute;
-                    bottom: 0;
+                .info-row + .info-row {{
+                    border-top: 0.5px solid #eee;
                 }}
                 {extra_styles}
             </style>
