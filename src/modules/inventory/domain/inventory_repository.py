@@ -41,6 +41,10 @@ class InventoryRepository:
         if ids:
             query = query.filter(Inventory.id.in_(ids))
 
+        exclude_ids = filters.get("exclude_ids")
+        if exclude_ids:
+            query = query.filter(~Inventory.id.in_(exclude_ids))
+
         almacen = filters.get("almacen")
         if almacen is not None and almacen != "":
             warehouse_id = self._parse_int_filter(almacen)
@@ -152,7 +156,9 @@ class InventoryRepository:
         return (
             self.db.query(Inventory)
             .options(
-                selectinload(Inventory.product),
+                selectinload(Inventory.product).selectinload(Product.category),
+                selectinload(Inventory.product).selectinload(Product.subcategory),
+                selectinload(Inventory.product).selectinload(Product.brand),
                 selectinload(Inventory.warehouse),
             )
             .filter(Inventory.id == inventory_id)
@@ -170,6 +176,14 @@ class InventoryRepository:
                 Inventory.box_size == box_size,
             )
             .first()
+        )
+
+    def warehouse_exists(self, warehouse_id: int) -> bool:
+        return (
+            self.db.query(Warehouse.id)
+            .filter(Warehouse.id == warehouse_id, Warehouse.is_active == True)  # noqa: E712
+            .first()
+            is not None
         )
 
     def add(self, inventory: Inventory, commit: bool = True) -> Inventory:

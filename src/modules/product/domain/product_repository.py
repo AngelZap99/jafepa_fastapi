@@ -39,16 +39,18 @@ class ProductRepository:
     def get_by_name(self, name: str) -> Product | None:
         return self.db.query(Product).filter(Product.name == name).first()
 
-    def add(self, product: Product) -> Product:
+    def add(self, product: Product, commit: bool = True) -> Product:
         self.db.add(product)
-        self.db.commit()
-        self.db.refresh(product)
+        if commit:
+            self.db.commit()
+            self.db.refresh(product)
         return product
 
-    def update(self, product: Product) -> Product:
+    def update(self, product: Product, commit: bool = True) -> Product:
         self.db.add(product)
-        self.db.commit()
-        self.db.refresh(product)
+        if commit:
+            self.db.commit()
+            self.db.refresh(product)
         return product
 
     def delete(self, product: Product):

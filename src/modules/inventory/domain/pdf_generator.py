@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Error as PlaywrightError, sync_playwright
 import requests
 import base64
 from html import escape
@@ -68,7 +68,7 @@ class PDFGenerator:
             return self._render_pdf('<div class="empty">No hay stock disponible.</div>')
 
         pages_html = ""
-        items_per_page = 12
+        items_per_page = 9
         chunks = [items[i:i + items_per_page] for i in range(0, len(items), items_per_page)]
 
         # Logo en Base64
@@ -85,12 +85,8 @@ class PDFGenerator:
             for i, item in enumerate(chunk):
                 real_index = (chunk_index * items_per_page) + i + 1
                 img_src = self._image_to_base64(getattr(item.product, "image", None))
-                nombre = getattr(item.product, "name", "Producto")
-                code = getattr(item.product, "code", "Producto")
-                stock = getattr(item, "stock", 0)
-                avg_cost = getattr(item, "avg_cost", 0)
-                last_cost = getattr(item, "last_cost", 0)
-                box_size = getattr(item, "box_size", 0)
+                nombre = escape(_display_value(getattr(item.product, "name", None), "Producto"))
+                code = escape(_display_value(getattr(item.product, "code", None), "Producto"))
                 
                 cards_html += f"""
                 <div class="product-card">
@@ -101,34 +97,12 @@ class PDFGenerator:
                     <div class="info-table">
                         <div class="info-row">
                             <span class="label">Nombre</span>
-                            <span class="value">{nombre[:18]}</span>
+                            <span class="value">{nombre[:28]}</span>
                         </div>
                         <div class="info-row">
                             <span class="label">Código</span>
                             <span class="value">{code}</span>
                         </div>
-
-                        <div class="info-row">
-                            <div class="info-column">
-                                <span class="label">Stock</span>
-                                <span class="value">{stock} Cajas</span>
-                            </div>
-                            <div class="info-column">
-                                <span class="label">Pz</span>
-                                <span class="value">{box_size}</span>
-                            </div>
-                        </div>
-                        <div class="info-row">
-                            <div class="info-column">
-                                <span class="label">AVG Cost</span>
-                                <span class="value">${avg_cost}</span>
-                            </div>
-                            <div class="info-column">
-                                <span class="label">Last Cost</span>
-                                <span class="value">${last_cost}</span>
-                            </div>
-                        </div>
-
                     </div>
                 </div>
                 """
@@ -331,19 +305,18 @@ class PDFGenerator:
 
                 .catalog-container {{
                     width: 100%;
-                    padding: 5mm;
-                    font-size: 0;
+                    padding: 6mm 7mm 5mm;
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 5mm;
                 }}
 
                 .product-card {{
-                    display: inline-block;
-                    vertical-align: top;
-                    width: calc(33.33% - 4mm);
-                    height: 60mm;
-                    margin: 2mm;
+                    width: 100%;
+                    height: 74mm;
                     border: 1px solid #E0E0E0;
                     border-radius: 10px;
-                    padding: 6mm 3mm 3mm 3mm;
+                    padding: 7mm 4mm 4mm 4mm;
                     position: relative;
                     background: #FAFAFA;
                     font-size: 12px;
@@ -362,19 +335,19 @@ class PDFGenerator:
                 }}
 
                 .image-container {{
-                    width: 100%; height: 28mm;
+                    width: 100%; height: 42mm;
                     display: flex; align-items: center; justify-content: center;
-                    margin-bottom: 2mm;
+                    margin-bottom: 3mm;
                 }}
                 .image-container img {{ max-height: 100%; max-width: 100%; object-fit: contain; }}
 
                 .info-table {{ width: 100%; font-size: 11px; }}
                 .info-row {{
                     display: flex; justify-content: space-between; align-items: center;
-                    padding: 4px 0; border-bottom: 0.5px solid #eee;
+                    padding: 6px 0; border-bottom: 0.5px solid #eee;
                 }}
                 .label {{ color: #777; }}
-                .value {{ font-weight: 700; color: #333; }}
+                .value {{ font-weight: 700; color: #333; text-align: right; }}
 
                 .footer-strip {{
                     background-color: #1A1A1A;
@@ -392,20 +365,26 @@ class PDFGenerator:
         </html>
         """
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                ]
-            )
-            page = browser.new_page()
-            page.set_content(html)
-            page.wait_for_timeout(1000)
-            pdf_bytes = page.pdf(
-                format="A4",
-                print_background=True,
-                margin={"top": "0", "bottom": "0", "left": "0", "right": "0"}
-            )
-            browser.close()
-        return pdf_bytes
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                    ]
+                )
+                page = browser.new_page()
+                page.set_content(html)
+                page.wait_for_timeout(1000)
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "0", "bottom": "0", "left": "0", "right": "0"}
+                )
+                browser.close()
+            return pdf_bytes
+        except PlaywrightError as exc:
+            raise RuntimeError(
+                "Playwright browser executable is missing or unavailable. "
+                "Run `playwright install chromium` in this environment."
+            ) from exc

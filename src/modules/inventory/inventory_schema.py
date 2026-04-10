@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
+from fastapi import Form
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from src.modules.product.product_schema import ProductResponse
@@ -21,11 +22,13 @@ class InventoryBase(BaseModel):
     stock: int = Field(ge=0)
     box_size: int = Field(ge=1)
 
-    avg_cost: float = Field(ge=0)
-    last_cost: float = Field(ge=0)
-
     warehouse_id: int = Field(gt=0)
     product_id: int = Field(gt=0)
+
+
+class InventoryCosts(BaseModel):
+    avg_cost: float = Field(ge=0)
+    last_cost: float = Field(ge=0)
 
     @field_validator("avg_cost", "last_cost", mode="before")
     @classmethod
@@ -40,29 +43,70 @@ class InventoryBase(BaseModel):
 #######################################
 class InventoryCreate(InventoryBase):
     model_config = ConfigDict(extra="forbid")
-    pass
+    is_active: bool = True
 
 
 class InventoryUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     stock: Optional[int] = Field(default=None, ge=0)
-    avg_cost: Optional[float] = Field(default=None, ge=0)
-    last_cost: Optional[float] = Field(default=None, ge=0)
+    box_size: Optional[int] = Field(default=None, ge=1)
     is_active: Optional[bool] = None
-
-    @field_validator("avg_cost", "last_cost", mode="before")
-    @classmethod
-    def normalize_cost(cls, value):
-        if value is None:
-            return value
-        return float(value)
 
     @model_validator(mode="after")
     def at_least_one_field(self):
         if not self.model_dump(exclude_unset=True):
             raise ValueError("At least one field must be provided")
         return self
+
+
+class InventoryCreateWithProduct(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=2, max_length=250)
+    code: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
+    category_id: int = Field(gt=0)
+    subcategory_id: Optional[int] = Field(default=None, gt=0)
+    brand_id: int = Field(gt=0)
+    warehouse_id: int = Field(gt=0)
+    stock: int = Field(ge=0)
+    box_size: int = Field(ge=1)
+    is_active: bool = True
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def normalize_code(cls, value):
+        if value is None:
+            return value
+        return str(value).strip().upper()
+
+    @classmethod
+    def as_form(
+        cls,
+        name: str = Form(...),
+        code: str = Form(...),
+        description: Optional[str] = Form(None),
+        category_id: int = Form(...),
+        subcategory_id: Optional[int] = Form(None),
+        brand_id: int = Form(...),
+        warehouse_id: int = Form(...),
+        stock: int = Form(...),
+        box_size: int = Form(...),
+        is_active: bool = Form(True),
+    ) -> "InventoryCreateWithProduct":
+        return cls(
+            name=name,
+            code=code,
+            description=description,
+            category_id=category_id,
+            subcategory_id=subcategory_id,
+            brand_id=brand_id,
+            warehouse_id=warehouse_id,
+            stock=stock,
+            box_size=box_size,
+            is_active=is_active,
+        )
 
 
 class InventoryUpdateStatus(BaseModel):
@@ -73,7 +117,7 @@ class InventoryUpdateStatus(BaseModel):
 #######################################
 # OUTPUTS
 #######################################
-class InventoryResponse(InventoryBase):
+class InventoryResponse(InventoryBase, InventoryCosts):
     id: int
     is_active: bool
     created_at: datetime

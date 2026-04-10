@@ -108,7 +108,6 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
             "subcategoria": subcategory.name,
             "marca": brand.name,
             "buscar": "rino",
-            "ids": [matching_inventory.id],
         },
     )
 
@@ -209,13 +208,98 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
     db_session.refresh(inventory_a)
     db_session.refresh(inventory_b)
 
-    response = client.get("/api/inventory/pdf/all", params={"ids": [inventory_b.id]})
+    response = client.get(
+        "/api/inventory/pdf/all",
+        params={"exclude_ids": str(inventory_a.id)},
+    )
 
     assert response.status_code == 200, response.text
     assert captured["warehouse"] is not None
     assert captured["warehouse"].id == warehouse_b.id
     assert len(captured["items"]) == 1
     assert captured["items"][0].id == inventory_b.id
+
+
+def test_inventory_pdf_supports_excluding_multiple_ids_with_csv(
+    client, db_session, monkeypatch
+):
+    from src.shared.models.brand.brand_model import Brand
+    from src.shared.models.category.category_model import Category
+    from src.shared.models.inventory.inventory_model import Inventory
+    from src.shared.models.product.product_model import Product
+    from src.shared.models.warehouse.warehouse_model import Warehouse
+
+    captured = {}
+
+    def fake_generate_inventory_pdf(self, items, warehouse=None):
+        captured["items"] = items
+        return b"%PDF-1.4 excluded"
+
+    monkeypatch.setattr(
+        PDFGenerator,
+        "generate_inventory_pdf",
+        fake_generate_inventory_pdf,
+        raising=True,
+    )
+
+    category = Category(name="Categoria Exclude CSV", description="Root", parent_id=None)
+    brand = Brand(name="Marca Exclude CSV")
+    warehouse = Warehouse(
+        name="Warehouse Exclude CSV",
+        address="Address CSV",
+        email="csv@example.com",
+        phone="+521111111111",
+    )
+    db_session.add(category)
+    db_session.add(brand)
+    db_session.add(warehouse)
+    db_session.commit()
+    db_session.refresh(category)
+    db_session.refresh(brand)
+    db_session.refresh(warehouse)
+
+    products = []
+    for index in range(1, 4):
+        product = Product(
+            name=f"Producto CSV {index}",
+            code=f"CSV-{index}",
+            description="Producto de prueba",
+            category_id=category.id,
+            subcategory_id=None,
+            brand_id=brand.id,
+            image=None,
+        )
+        db_session.add(product)
+        products.append(product)
+    db_session.commit()
+    for product in products:
+        db_session.refresh(product)
+
+    inventories = []
+    for index, product in enumerate(products, start=1):
+        inventory = Inventory(
+            stock=index,
+            box_size=1,
+            avg_cost=0,
+            last_cost=0,
+            warehouse_id=warehouse.id,
+            product_id=product.id,
+            is_active=True,
+        )
+        db_session.add(inventory)
+        inventories.append(inventory)
+    db_session.commit()
+    for inventory in inventories:
+        db_session.refresh(inventory)
+
+    response = client.get(
+        "/api/inventory/pdf/all",
+        params={"exclude_ids": f"{inventories[0].id},{inventories[2].id}"},
+    )
+
+    assert response.status_code == 200, response.text
+    remaining_ids = [item.id for item in captured["items"]]
+    assert remaining_ids == [inventories[1].id]
 
 
 def test_inventory_repository_get_report_warehouse_supports_name_and_id_filters(db_session):
@@ -290,3 +374,69 @@ def test_pdf_generator_uses_real_warehouse_header_instead_of_generic_placeholder
     assert "central@example.com" in html
     assert "Calle Falsa 123, Ciudad" not in html
     assert "contacto@miempresa.com" not in html
+    assert "Stock" not in html
+    assert "AVG Cost" not in html
+    assert "Last Cost" not in html
+
+
+def test_pdf_generator_uses_nine_products_per_page(monkeypatch):
+    generator = PDFGenerator()
+    captured = {}
+
+    def fake_render_pdf(pages_html, extra_styles=""):
+        captured["pages_html"] = pages_html
+        return b"%PDF-1.4 pages"
+
+    monkeypatch.setattr(generator, "_render_pdf", fake_render_pdf, raising=True)
+    monkeypatch.setattr(
+        generator,
+        "_image_to_base64",
+        lambda *_args, **_kwargs: "data:image/png;base64,AAA",
+        raising=True,
+    )
+
+    warehouse = SimpleNamespace(
+        name="Almacen Central",
+        address="Av. Real 123",
+        phone="+525500000000",
+        email="central@example.com",
+    )
+    items = [
+        SimpleNamespace(
+            product=SimpleNamespace(name=f"Producto {index}", code=f"COD-{index}", image=None),
+            stock=index,
+            avg_cost=10.0,
+            last_cost=12.0,
+            box_size=2,
+        )
+        for index in range(1, 11)
+    ]
+
+    pdf_bytes = generator.generate_inventory_pdf(items, warehouse=warehouse)
+
+    assert pdf_bytes == b"%PDF-1.4 pages"
+    html = captured["pages_html"]
+    assert html.count('class="page"') == 2
+    assert "Producto 10" in html
+
+
+def test_inventory_pdf_returns_503_when_playwright_browser_is_missing(
+    client, monkeypatch
+):
+    def raise_browser_missing(self, items, warehouse=None):
+        raise RuntimeError(
+            "Playwright browser executable is missing or unavailable. "
+            "Run `playwright install chromium` in this environment."
+        )
+
+    monkeypatch.setattr(
+        PDFGenerator,
+        "generate_inventory_pdf",
+        raise_browser_missing,
+        raising=True,
+    )
+
+    response = client.get("/api/inventory/pdf/all")
+
+    assert response.status_code == 503, response.text
+    assert "playwright install chromium" in response.json()["message"]

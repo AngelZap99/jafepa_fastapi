@@ -8,9 +8,18 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # Environment variables - Default to development
-PY_ENV = os.getenv("PYENV", "development")
-IS_TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"} or PY_ENV.lower() == "test"
+PY_ENV = os.getenv("PY_ENV") or os.getenv("PYENV", "development")
+SQL_ECHO = _env_flag("SQL_ECHO", default=False)
+IS_TESTING = _env_flag("TESTING") or PY_ENV.lower() == "test"
 
 if IS_TESTING:
     DATABASE_URL = "sqlite+pysqlite:///:memory:"
@@ -59,7 +68,7 @@ else:
     # Create engine with connection pooling
     engine = create_engine(
         DATABASE_URL,
-        echo=PY_ENV == "development",
+        echo=SQL_ECHO,
         pool_pre_ping=True,  # Verify connections before using
         pool_size=10,  # Number of connections to maintain
         max_overflow=20,  # Max connections beyond pool_size

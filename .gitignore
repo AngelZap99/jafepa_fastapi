@@ -139,3 +139,6 @@ cython_debug/
 
 # VSCode
 .vscode/settings.json
+
+# Media files
+media/
