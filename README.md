@@ -85,8 +85,8 @@ jafepa-fastapi/
 - JWT/auth keys (used by `src/shared/config/env_config.py`):
   - `JWT_SECRET_KEY`
   - `JWT_ALGORITHM` (default `HS256`)
-  - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default `30`)
-  - `JWT_REFRESH_TOKEN_EXPIRE_DAYS` (default `7`)
+  - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default `480`)
+  - `JWT_REFRESH_TOKEN_EXPIRE_DAYS` (default `1`)
   - `JWT_ENCRYPTION_KEY` (optional)
 
 > Missing required variables raise `RuntimeError` at startup, ensuring misconfigurations are detected early.
