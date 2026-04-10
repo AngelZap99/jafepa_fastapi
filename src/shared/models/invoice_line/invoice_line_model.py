@@ -1,10 +1,11 @@
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Numeric
+from sqlalchemy import Enum as SAEnum, Numeric
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
+from src.shared.enums.invoice_enums import InvoiceLinePriceType
 from src.shared.models.base_model import MyBaseModel
 
 
@@ -19,6 +20,11 @@ class InvoiceLine(MyBaseModel, table=True):
     total_units: int = Field(nullable=False, gt=0)
 
     price: Decimal = Field(sa_type=Numeric(12, 2), nullable=False)
+    price_type: InvoiceLinePriceType = Field(
+        default=InvoiceLinePriceType.BOX,
+        sa_type=SAEnum(InvoiceLinePriceType, name="invoicelinepricetype"),
+        nullable=False,
+    )
     inventory_applied: bool = Field(default=False, nullable=False, index=True)
 
     invoice: Mapped[Optional["Invoice"]] = Relationship(

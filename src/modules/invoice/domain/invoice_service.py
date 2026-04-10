@@ -6,6 +6,7 @@ from uuid import uuid4
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 
+from src.shared.enums.invoice_enums import InvoiceLinePriceType
 from src.shared.models.invoice.invoice_model import Invoice
 from src.shared.models.invoice_line.invoice_line_model import InvoiceLine
 from src.shared.models.inventory.inventory_model import Inventory
@@ -51,6 +52,16 @@ def _constraint_name(err: IntegrityError) -> str | None:
 class InvoiceService:
     def __init__(self, repository: InvoiceRepository) -> None:
         self.repository = repository
+
+    def _normalize_line_price(
+        self,
+        price: Decimal,
+        price_type: InvoiceLinePriceType,
+        box_size: int,
+    ) -> Decimal:
+        if price_type == InvoiceLinePriceType.UNIT:
+            return price * Decimal(box_size)
+        return price
 
     def _get_invoice_or_404(self, invoice_id: int) -> Invoice:
         invoice = self.repository.get(invoice_id)
@@ -256,7 +267,7 @@ class InvoiceService:
             arrival_date=payload.arrival_date,
             status=payload.status,
             dollar_exchange_rate=payload.dollar_exchange_rate,
-            logistic_tax=payload.logistic_tax,
+            logistic_tax=payload.general_expenses,
             notes=payload.notes,
             warehouse_id=payload.warehouse_id,
         )
@@ -264,13 +275,19 @@ class InvoiceService:
         # Create lines only if provided
         for l in payload.lines:
             total_units = l.box_size * l.quantity_boxes
+            normalized_price = self._normalize_line_price(
+                price=l.price,
+                price_type=l.price_type,
+                box_size=l.box_size,
+            )
             invoice.lines.append(
                 InvoiceLine(
                     product_id=l.product_id,
                     box_size=l.box_size,
                     quantity_boxes=l.quantity_boxes,
                     total_units=total_units,
-                    price=l.price,
+                    price=normalized_price,
+                    price_type=l.price_type,
                 )
             )
 
@@ -324,6 +341,8 @@ class InvoiceService:
                 detail="Cannot modify an ARRIVED invoice. Revert status first.",
             )
         data = payload.model_dump(exclude_unset=True)
+        if "general_expenses" in data:
+            data["logistic_tax"] = data.pop("general_expenses")
 
         for field, value in data.items():
             setattr(invoice, field, value)
@@ -404,12 +423,18 @@ class InvoiceService:
             )
 
         total_units = payload.box_size * payload.quantity_boxes
+        normalized_price = self._normalize_line_price(
+            price=payload.price,
+            price_type=payload.price_type,
+            box_size=payload.box_size,
+        )
         line = InvoiceLine(
             product_id=payload.product_id,
             box_size=payload.box_size,
             quantity_boxes=payload.quantity_boxes,
             total_units=total_units,
-            price=payload.price,
+            price=normalized_price,
+            price_type=payload.price_type,
         )
 
         try:
@@ -430,6 +455,15 @@ class InvoiceService:
                 detail="Cannot modify lines of an ARRIVED invoice. Revert status first.",
             )
         data = payload.model_dump(exclude_unset=True)
+        if "price" in data or "price_type" in data:
+            next_price = data.get("price", line.price)
+            next_price_type = data.get("price_type", line.price_type)
+            next_box_size = data.get("box_size", line.box_size)
+            data["price"] = self._normalize_line_price(
+                price=next_price,
+                price_type=next_price_type,
+                box_size=next_box_size,
+            )
 
         for field, value in data.items():
             setattr(line, field, value)

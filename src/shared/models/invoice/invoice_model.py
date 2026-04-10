@@ -49,3 +49,11 @@ class Invoice(MyBaseModel, table=True):
             "order_by": "InvoiceLine.id",
         },
     )
+
+    @property
+    def general_expenses(self) -> Decimal:
+        return self.logistic_tax
+
+    @general_expenses.setter
+    def general_expenses(self, value: Decimal) -> None:
+        self.logistic_tax = value

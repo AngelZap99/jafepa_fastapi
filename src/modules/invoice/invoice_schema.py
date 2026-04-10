@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, AliasChoices, computed_field, model_validator
 
 from src.shared.models.invoice.invoice_model import InvoiceStatus
 from src.modules.invoice_line.invoice_line_schema import (
@@ -20,7 +20,7 @@ class InvoiceBase(BaseModel):
     invoice_number: str = Field(min_length=1, max_length=50)
     sequence: int = Field(gt=0)
 
-    invoice_date: date
+    invoice_date: date = Field(default_factory=date.today)
     order_date: Optional[date] = None
     arrival_date: Optional[date] = None
 
@@ -29,7 +29,11 @@ class InvoiceBase(BaseModel):
     dollar_exchange_rate: Decimal = Field(
         default=Decimal("1.000000"), ge=Decimal("0.000001")
     )
-    logistic_tax: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    general_expenses: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0.00"),
+        validation_alias=AliasChoices("general_expenses", "logistic_tax"),
+    )
 
     notes: Optional[str] = Field(default=None, max_length=500)
 
@@ -81,7 +85,11 @@ class InvoiceUpdate(BaseModel):
     dollar_exchange_rate: Optional[Decimal] = Field(
         default=None, ge=Decimal("0.000001")
     )
-    logistic_tax: Optional[Decimal] = Field(default=None, ge=Decimal("0.00"))
+    general_expenses: Optional[Decimal] = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        validation_alias=AliasChoices("general_expenses", "logistic_tax"),
+    )
 
     notes: Optional[str] = Field(default=None, max_length=500)
     warehouse_id: Optional[int] = Field(default=None, gt=0)
@@ -111,7 +119,7 @@ class InvoiceResponse(BaseModel):
 
     status: InvoiceStatus
     dollar_exchange_rate: Decimal
-    logistic_tax: Decimal
+    general_expenses: Decimal
     notes: Optional[str] = None
 
     warehouse_id: int
@@ -122,3 +130,16 @@ class InvoiceResponse(BaseModel):
 
     warehouse: Optional[WarehouseLineResponse] = None
     lines: List[InvoiceLineResponse] = Field(default_factory=list)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def subtotal(self) -> Decimal:
+        return sum(
+            (line.total_price for line in self.lines if line.is_active),
+            Decimal("0.00"),
+        )
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def total(self) -> Decimal:
+        return self.subtotal + self.general_expenses

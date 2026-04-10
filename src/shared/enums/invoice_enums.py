@@ -6,3 +6,8 @@ class InvoiceStatus(str, Enum):
     DRAFT = "DRAFT"
     ARRIVED = "ARRIVED"
     CANCELLED = "CANCELLED"
+
+
+class InvoiceLinePriceType(str, Enum):
+    UNIT = "UNIT"
+    BOX = "BOX"
