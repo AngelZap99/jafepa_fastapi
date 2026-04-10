@@ -149,17 +149,15 @@ class PDFGenerator:
             if not line.is_active:
                 continue
             
-            product_name = "Producto"
-            product_code = "N/A"
-            if line.inventory and line.inventory.product:
-                product_name = line.inventory.product.name
-                product_code = line.inventory.product.code
+            product_name = getattr(line, "product_name", None) or "Producto"
+            product_code = getattr(line, "product_code", None) or "N/A"
+            quantity_boxes = getattr(line, "quantity_boxes", line.quantity_units)
             
             lines_html += f"""
             <tr class="item-row">
                 <td class="col-code">{product_code}</td>
                 <td class="col-desc">{product_name}</td>
-                <td class="col-qty">{line.quantity_units}</td>
+                <td class="col-qty">{quantity_boxes}</td>
                 <td class="col-price">${line.price:,.2f}</td>
                 <td class="col-total">${line.total_price:,.2f}</td>
             </tr>
@@ -174,21 +172,20 @@ class PDFGenerator:
             <div class="invoice-header">
                 <div class="header-main">
                     <img src="{logo_base64}" class="invoice-logo">
-                    <div class="invoice-title">FACTURA DE VENTA</div>
+                    <div class="invoice-title">COMPROBANTE DE VENTA</div>
                 </div>
                 <div class="header-info">
                     <div class="info-block">
                         <strong>EMISOR</strong><br>
-                        JAFEPA S.A. de C.V.<br>
-                        Calle Falsa 123, Ciudad<br>
-                        RFC: JAF123456789<br>
-                        Tel: +52 55 1234 5678
+                        ALEFCO S.A. de C.V.<br>
+                        Calle Carbones #134, Guadalajara, Jalisco.<br>
+                        RFC: -<br>
+                        Tel: -
                     </div>
                     <div class="info-block text-right">
                         <strong>DETALLE</strong><br>
-                        Folio: #SAL-{sale.id:06d}<br>
+                        Folio de venta: #SAL-{sale.id:06d}<br>
                         Fecha: {sale.sale_date}<br>
-                        Estado: {sale.status.value}<br>
                     </div>
                 </div>
             </div>
@@ -231,15 +228,15 @@ class PDFGenerator:
 
         # Estilos específicos para la factura (sin etiquetas <style>)
         invoice_styles = """
-    .invoice-header { padding: 10mm; background: #fff; }
-    .header-main { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1A1A1A; padding-bottom: 5mm; margin-bottom: 5mm; }
+    .invoice-header { padding: 8mm 10mm 6mm; background: #fff; }
+    .header-main { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1A1A1A; padding-bottom: 3mm; margin-bottom: 3mm; }
     .invoice-logo { height: 20mm; }
     .invoice-title { font-family: 'Oswald', sans-serif; font-size: 28px; color: #1A1A1A; }
     
-    .header-info { display: flex; justify-content: space-between; font-family: 'Roboto', sans-serif; font-size: 12px; line-height: 1.5; }
+    .header-info { display: flex; justify-content: space-between; font-family: 'Roboto', sans-serif; font-size: 12px; line-height: 1.35; gap: 8mm; }
     .text-right { text-align: right; }
     
-    .invoice-client { margin: 5mm 10mm; padding: 5mm; background: #F5F5F5; border-radius: 4px; font-family: 'Roboto', sans-serif; font-size: 12px; }
+    .invoice-client { margin: 4mm 10mm; padding: 3.5mm 5mm; background: #F5F5F5; border-radius: 4px; font-family: 'Roboto', sans-serif; font-size: 12px; line-height: 1.25; }
     
     .invoice-table { width: calc(100% - 20mm); margin: 5mm 10mm; border-collapse: collapse; font-family: 'Roboto', sans-serif; }
     .invoice-table th { background: #1A1A1A; color: #fff; padding: 3mm; font-size: 11px; text-align: left; }
