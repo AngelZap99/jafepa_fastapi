@@ -23,6 +23,7 @@ from src.modules.inventory.domain.inventory_movement_repository import (
 )
 from src.modules.inventory.domain.inventory_repository import InventoryRepository
 from src.modules.sale.domain.sale_repository import SaleRepository
+from src.modules.users.domain.users_repository import UserRepository
 from src.modules.sale.sale_schema import (
     SaleCreateWithLines,
     SaleLineCreate,
@@ -79,6 +80,19 @@ class SaleService:
                 detail="Inventory record not found",
             )
         return inventory
+
+    def _get_user_display_name(self, user_id: int | None) -> str | None:
+        if not user_id:
+            return None
+
+        user = UserRepository(self.repository.db).get(user_id)
+        if not user:
+            return None
+
+        display_name = " ".join(
+            part for part in [user.first_name, user.last_name] if part
+        ).strip()
+        return display_name or user.email
 
     def _available_boxes(self, inventory: Inventory) -> int:
         return int(inventory.stock)
@@ -356,7 +370,9 @@ class SaleService:
 
         return self._get_sale_or_404(sale_id)
 
-    def update_sale_status(self, sale_id: int, payload: SaleUpdateStatus) -> Sale:
+    def update_sale_status(
+        self, sale_id: int, payload: SaleUpdateStatus, current_user=None
+    ) -> Sale:
         session = self.repository.db
 
         try:
@@ -402,6 +418,8 @@ class SaleService:
                 )
 
             if new_status == SaleStatus.PAID:
+                if current_user is not None:
+                    sale.updated_by = getattr(current_user, "id", None)
                 self._apply_sale_paid(sale)
             elif previous_status == SaleStatus.PAID:
                 self._apply_sale_unpaid(sale)
@@ -651,6 +669,7 @@ class SaleService:
                     status=sale.status,
                     client=sale.client,
                     total_amount=Decimal("0.00"),
+                    updated_by=sale.updated_by,
                     lines=[],
                 )
 
@@ -742,7 +761,11 @@ class SaleService:
     def generate_invoice_pdf(self, sale_id: int):
         """Genera el PDF de la factura para una venta específica (retorna bytes)"""
         sale = self._get_sale_or_404(sale_id)
-        pdf_bytes = self._pdf_generator.generate_sale_invoice_pdf(sale)
+        delivered_by_name = self._get_user_display_name(getattr(sale, "updated_by", None))
+        pdf_bytes = self._pdf_generator.generate_sale_invoice_pdf(
+            sale,
+            delivered_by_name=delivered_by_name,
+        )
         
         return Response(
             content=pdf_bytes,

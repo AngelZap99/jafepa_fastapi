@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, status, Query
 
+from src.modules.auth.auth_dependencies import get_current_user
 from src.shared.database.dependencies import SessionDep
 
 from src.modules.sale.sale_schema import (
@@ -109,9 +110,10 @@ def update_sale(
 def update_sale_status(
     sale_id: int,
     payload: SaleUpdateStatus,
+    current_user = Depends(get_current_user),
     sale_service: SaleService = Depends(get_sale_service),
 ):
-    return sale_service.update_sale_status(sale_id, payload)
+    return sale_service.update_sale_status(sale_id, payload, current_user)
 
 
 @router.delete(

@@ -1,9 +1,17 @@
 import os
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from playwright.sync_api import Error as PlaywrightError, sync_playwright
 import requests
 import base64
 from html import escape
+
+from src.shared.enums.sale_enums import SaleLinePriceType
+
+
+SALE_TAX_PERCENT = Decimal("16")
+SALE_TAX_RATE = SALE_TAX_PERCENT / Decimal("100")
+MONEY_QUANTIZER = Decimal("0.01")
 
 
 def _display_value(value, fallback="No disponible"):
@@ -11,6 +19,12 @@ def _display_value(value, fallback="No disponible"):
         return fallback
     text = str(value).strip()
     return text if text else fallback
+
+
+def _money(value):
+    if value is None:
+        return Decimal("0.00")
+    return Decimal(str(value)).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
 
 class PDFGenerator:
 
@@ -140,71 +154,74 @@ class PDFGenerator:
 
         return self._render_pdf(pages_html)
 
-    def generate_sale_invoice_pdf(self, sale):
-        """Genera un PDF de la factura de venta"""
+    def generate_sale_invoice_pdf(self, sale, delivered_by_name=None):
+        """Genera un PDF de la nota de venta"""
         logo_base64 = self._image_to_base64(self.logo_path)
-        
+
         lines_html = ""
+        subtotal_amount = Decimal("0.00")
         for line in sale.lines:
             if not line.is_active:
                 continue
-            
+
             product_name = getattr(line, "product_name", None) or "Producto"
             product_code = getattr(line, "product_code", None) or "N/A"
-            quantity_boxes = getattr(line, "quantity_boxes", line.quantity_units)
-            
+            quantity_boxes = int(getattr(line, "quantity_boxes", line.quantity_units))
+            box_size = int(getattr(line, "box_size", None) or 1)
+            quantity_units = quantity_boxes * box_size
+            price_type = getattr(line, "price_type", SaleLinePriceType.BOX)
+            price_type_value = getattr(price_type, "value", price_type)
+            is_unit_price = str(price_type_value).upper() == "UNIT" or box_size == 1
+            pieces_label = "Unitario" if box_size == 1 else f"{box_size} Piezas/Caja"
+            price_value = (
+                getattr(line, "unit_price", None)
+                if is_unit_price
+                else getattr(line, "box_price", None)
+            ) or line.price
+            line_total = _money(getattr(line, "total_price", None))
+            subtotal_amount += line_total
+
             lines_html += f"""
             <tr class="item-row">
                 <td class="col-code">{product_code}</td>
                 <td class="col-desc">{product_name}</td>
                 <td class="col-qty">{quantity_boxes}</td>
-                <td class="col-price">${line.price:,.2f}</td>
-                <td class="col-total">${line.total_price:,.2f}</td>
+                <td class="col-box">{pieces_label}</td>
+                <td class="col-units">{quantity_units}</td>
+                <td class="col-price"><div class="cell-value">${price_value:,.2f}</div></td>
+                <td class="col-total">${line_total:,.2f}</td>
             </tr>
             """
 
         client_name = sale.client.name if sale.client else "Público en General"
-        client_email = sale.client.email if sale.client and sale.client.email else ""
-        client_phone = sale.client.phone if sale.client and sale.client.phone else ""
+        attended_by = delivered_by_name or "Pendiente"
+        tax_amount = _money(subtotal_amount * SALE_TAX_RATE)
+        total_amount = _money(subtotal_amount + tax_amount)
 
         invoice_html = f"""
         <div class="page">
             <div class="invoice-header">
                 <div class="header-main">
+                    <div class="header-text">
+                        <div class="invoice-title">Nota de venta #{sale.id}</div>
+                        <div class="invoice-meta">Fecha: {sale.sale_date}</div>
+                        <div class="invoice-meta">Cliente: {client_name}</div>
+                        <div class="invoice-meta">Atendido por: {attended_by}</div>
+                    </div>
                     <img src="{logo_base64}" class="invoice-logo">
-                    <div class="invoice-title">COMPROBANTE DE VENTA</div>
                 </div>
-                <div class="header-info">
-                    <div class="info-block">
-                        <strong>EMISOR</strong><br>
-                        ALEFCO S.A. de C.V.<br>
-                        Calle Carbones #134, Guadalajara, Jalisco.<br>
-                        RFC: -<br>
-                        Tel: -
-                    </div>
-                    <div class="info-block text-right">
-                        <strong>DETALLE</strong><br>
-                        Folio de venta: #SAL-{sale.id:06d}<br>
-                        Fecha: {sale.sale_date}<br>
-                    </div>
-                </div>
-            </div>
-
-            <div class="invoice-client">
-                <strong>CLIENTE</strong><br>
-                Nombre: {client_name}<br>
-                Email: {client_email}<br>
-                Tel: {client_phone}
             </div>
 
             <table class="invoice-table">
                 <thead>
                     <tr>
-                        <th class="col-code">CÓDIGO</th>
-                        <th class="col-desc">DESCRIPCIÓN</th>
-                        <th class="col-qty">CANT.</th>
-                        <th class="col-price">PRECIO UNIT.</th>
-                        <th class="col-total">TOTAL</th>
+                        <th class="col-code">Código</th>
+                        <th class="col-desc">Nombre del producto</th>
+                        <th class="col-qty">Cajas</th>
+                        <th class="col-box">Piezas/Caja</th>
+                        <th class="col-units">Piezas totales</th>
+                        <th class="col-price">Precio producto</th>
+                        <th class="col-total">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -212,49 +229,58 @@ class PDFGenerator:
                 </tbody>
             </table>
 
-            <div class="invoice-summary">
-                <div class="summary-row total">
-                    <span>TOTAL:</span>
-                    <span>${sale.total_price:,.2f}</span>
+            <div class="invoice-bottom">
+                <div class="invoice-note">
+                    <div>NO SE ACEPTAN DEVOLUCIONES.</div>
+                    <div>LA MERCANCÍA VIAJA POR CUENTA Y RIESGO DEL CLIENTE.</div>
+                    <div>POR SU ATENCIÓN GRACIAS.</div>
                 </div>
-            </div>
-
-            <div class="invoice-footer">
-                <p>Gracias por su preferencia.</p>
-                <div class="footer-strip"></div>
+                <div class="invoice-summary">
+                    <div class="summary-row">
+                        <span>Subtotal:</span>
+                        <span>${subtotal_amount:,.2f}</span>
+                    </div>
+                    <div class="summary-row">
+                        <span>Impuesto ({SALE_TAX_PERCENT:.0f}%):</span>
+                        <span>${tax_amount:,.2f}</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Total:</span>
+                        <span>${total_amount:,.2f}</span>
+                    </div>
+                </div>
             </div>
         </div>
         """
 
-        # Estilos específicos para la factura (sin etiquetas <style>)
         invoice_styles = """
-    .invoice-header { padding: 8mm 10mm 6mm; background: #fff; }
-    .header-main { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1A1A1A; padding-bottom: 3mm; margin-bottom: 3mm; }
-    .invoice-logo { height: 20mm; }
-    .invoice-title { font-family: 'Oswald', sans-serif; font-size: 28px; color: #1A1A1A; }
+    .invoice-header { padding: 8mm 10mm 4mm; background: #fff; }
+    .header-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 8mm; border-bottom: 2px solid #1A1A1A; padding-bottom: 3mm; margin-bottom: 3mm; }
+    .header-text { flex: 1; min-width: 0; }
+    .invoice-logo { height: 22mm; width: auto; object-fit: contain; }
+    .invoice-title { font-family: 'Oswald', sans-serif; font-size: 24px; color: #1A1A1A; line-height: 1.1; margin-bottom: 1mm; }
+    .invoice-meta { font-family: 'Roboto', sans-serif; font-size: 11px; line-height: 1.3; color: #1A1A1A; }
     
-    .header-info { display: flex; justify-content: space-between; font-family: 'Roboto', sans-serif; font-size: 12px; line-height: 1.35; gap: 8mm; }
-    .text-right { text-align: right; }
+    .invoice-table { width: calc(100% - 20mm); margin: 3mm 10mm 4mm; border-collapse: collapse; font-family: 'Roboto', sans-serif; }
+    .invoice-table th { background: #1A1A1A; color: #fff; padding: 2.5mm 2mm; font-size: 10px; text-align: center; }
+    .invoice-table td { padding: 2.5mm 2mm; border-bottom: 1px solid #EEE; font-size: 10px; vertical-align: top; }
     
-    .invoice-client { margin: 4mm 10mm; padding: 3.5mm 5mm; background: #F5F5F5; border-radius: 4px; font-family: 'Roboto', sans-serif; font-size: 12px; line-height: 1.25; }
+    .col-code { width: 12%; }
+    .col-desc { width: 28%; }
+    .col-qty { width: 8%; text-align: center; }
+    .col-box { width: 16%; text-align: center; }
+    .col-units { width: 12%; text-align: center; }
+    .col-price { width: 12%; text-align: right; }
+    .col-total { width: 12%; text-align: right; }
+    .cell-value { font-size: 10px; font-weight: 700; line-height: 1.1; }
     
-    .invoice-table { width: calc(100% - 20mm); margin: 5mm 10mm; border-collapse: collapse; font-family: 'Roboto', sans-serif; }
-    .invoice-table th { background: #1A1A1A; color: #fff; padding: 3mm; font-size: 11px; text-align: left; }
-    .invoice-table td { padding: 3mm; border-bottom: 1px solid #EEE; font-size: 11px; }
-    
-    .col-code { width: 15%; }
-    .col-desc { width: 45%; }
-    .col-qty { width: 10%; text-align: center; }
-    .col-price { width: 15%; text-align: right; }
-    .col-total { width: 15%; text-align: right; }
-    
-    .invoice-summary { margin: 5mm 10mm; display: flex; justify-content: flex-end; }
-    .summary-row { width: 40%; display: flex; justify-content: space-between; padding: 2mm 0; font-family: 'Roboto', sans-serif; }
-    .summary-row.total { border-top: 2px solid #1A1A1A; font-weight: bold; font-size: 16px; margin-top: 2mm; }
-    
-    .invoice-footer { position: absolute; bottom: 0; width: 100%; text-align: center; font-family: 'Roboto', sans-serif; font-size: 10px; color: #777; padding-bottom: 5mm; }
+    .invoice-bottom { margin: 3mm 10mm 0; display: flex; justify-content: space-between; gap: 8mm; align-items: flex-end; }
+    .invoice-note { flex: 1; font-family: 'Roboto', sans-serif; font-size: 9.5px; line-height: 1.15; text-transform: uppercase; color: #1A1A1A; }
+    .invoice-summary { width: 38%; min-width: 65mm; margin-left: auto; display: flex; flex-direction: column; gap: 1mm; }
+    .summary-row { width: 100%; display: flex; justify-content: space-between; padding: 1.5mm 0; font-family: 'Roboto', sans-serif; font-size: 14px; font-weight: 700; }
+    .summary-row.total { border-top: 2px solid #1A1A1A; margin-top: 1mm; }
 """
-        
+
         return self._render_pdf(invoice_html, extra_styles=invoice_styles)
 
     def _render_pdf(self, pages_html, extra_styles=""):

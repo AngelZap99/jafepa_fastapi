@@ -133,6 +133,7 @@ class SaleResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    updated_by: Optional[int] = None
 
     lines: List[SaleLineResponse] = Field(default_factory=list)
 
@@ -197,6 +198,7 @@ class SaleReportSaleDetail(BaseModel):
     status: SaleStatus
     client: Optional[SaleReportClientRef] = None
     total_amount: Decimal
+    updated_by: Optional[int] = None
     lines: List[SaleReportSaleLine] = Field(default_factory=list)
 
 
