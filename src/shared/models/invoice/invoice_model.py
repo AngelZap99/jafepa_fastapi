@@ -31,6 +31,9 @@ class Invoice(MyBaseModel, table=True):
     logistic_tax: Decimal = Field(
         default=Decimal("0.00"), sa_type=Numeric(12, 2), nullable=False
     )
+    approximate_profit_rate: Decimal = Field(
+        default=Decimal("0.00"), sa_type=Numeric(12, 2), nullable=False
+    )
 
     notes: Optional[str] = Field(default=None, max_length=500)
 

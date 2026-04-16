@@ -268,6 +268,7 @@ class InvoiceService:
             status=payload.status,
             dollar_exchange_rate=payload.dollar_exchange_rate,
             logistic_tax=payload.general_expenses,
+            approximate_profit_rate=payload.approximate_profit_rate,
             notes=payload.notes,
             warehouse_id=payload.warehouse_id,
         )

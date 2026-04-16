@@ -245,6 +245,39 @@ class InventoryService:
             commit=False,
         )
 
+    def _ensure_unitary_placeholder(
+        self,
+        *,
+        warehouse_id: int,
+        product_id: int,
+    ) -> None:
+        existing_unitary_inventory = self.repository.get_by_keys(
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            box_size=1,
+        )
+        if existing_unitary_inventory is not None:
+            if not existing_unitary_inventory.is_active:
+                existing_unitary_inventory.is_active = True
+                self.repository.update(existing_unitary_inventory, commit=True)
+            return
+
+        unitary_inventory = Inventory(
+            stock=0,
+            box_size=1,
+            avg_cost=0,
+            last_cost=0,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            is_active=True,
+        )
+
+        try:
+            self.repository.add(unitary_inventory, commit=True)
+        except IntegrityError:
+            self.repository.db.rollback()
+            return
+
     def _expanded_inventory(self, inventory_id: int) -> Inventory:
         inventory = self.repository.get(inventory_id)
         if inventory is None:
@@ -294,6 +327,11 @@ class InventoryService:
             session.flush()
             self._record_manual_create(inventory, movement_repository)
             session.commit()
+            if payload.box_size > 1:
+                self._ensure_unitary_placeholder(
+                    warehouse_id=payload.warehouse_id,
+                    product_id=payload.product_id,
+                )
         except IntegrityError:
             session.rollback()
             self._raise_conflict(
@@ -373,6 +411,11 @@ class InventoryService:
             session.flush()
             self._record_manual_create(inventory, movement_repository)
             session.commit()
+            if payload.box_size > 1:
+                self._ensure_unitary_placeholder(
+                    warehouse_id=payload.warehouse_id,
+                    product_id=product.id,
+                )
         except HTTPException:
             session.rollback()
             if uploaded_key:

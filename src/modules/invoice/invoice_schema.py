@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, AliasChoices, computed_field, model_validator
@@ -33,6 +33,15 @@ class InvoiceBase(BaseModel):
         default=Decimal("0.00"),
         ge=Decimal("0.00"),
         validation_alias=AliasChoices("general_expenses", "logistic_tax"),
+    )
+    approximate_profit_rate: Decimal = Field(
+        default=Decimal("0.00"),
+        ge=Decimal("0.00"),
+        validation_alias=AliasChoices(
+            "approximate_profit_rate",
+            "approximate_profit",
+            "estimated_profit",
+        ),
     )
 
     notes: Optional[str] = Field(default=None, max_length=500)
@@ -90,6 +99,15 @@ class InvoiceUpdate(BaseModel):
         ge=Decimal("0.00"),
         validation_alias=AliasChoices("general_expenses", "logistic_tax"),
     )
+    approximate_profit_rate: Optional[Decimal] = Field(
+        default=None,
+        ge=Decimal("0.00"),
+        validation_alias=AliasChoices(
+            "approximate_profit_rate",
+            "approximate_profit",
+            "estimated_profit",
+        ),
+    )
 
     notes: Optional[str] = Field(default=None, max_length=500)
     warehouse_id: Optional[int] = Field(default=None, gt=0)
@@ -120,6 +138,7 @@ class InvoiceResponse(BaseModel):
     status: InvoiceStatus
     dollar_exchange_rate: Decimal
     general_expenses: Decimal
+    approximate_profit_rate: Decimal
     notes: Optional[str] = None
 
     warehouse_id: int
@@ -141,5 +160,19 @@ class InvoiceResponse(BaseModel):
 
     @computed_field  # type: ignore[misc]
     @property
+    def general_expenses_total(self) -> Decimal:
+        return (
+            self.subtotal * self.general_expenses / Decimal("100")
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def approximate_profit_total(self) -> Decimal:
+        return (
+            self.subtotal * self.approximate_profit_rate / Decimal("100")
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @computed_field  # type: ignore[misc]
+    @property
     def total(self) -> Decimal:
-        return self.subtotal + self.general_expenses
+        return self.subtotal + self.general_expenses_total + self.approximate_profit_total

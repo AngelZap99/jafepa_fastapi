@@ -18,7 +18,8 @@ Backend service for the JAFEPA platform built with FastAPI and SQLModel.
 10. [Linting & Formatting](#linting--formatting)
 11. [API Summary](#api-summary)
 12. [Recommended Workflow](#recommended-workflow)
-13. [Troubleshooting](#troubleshooting)
+13. [Domain Documentation](#domain-documentation)
+14. [Troubleshooting](#troubleshooting)
 
 ## 1. Overview
 
@@ -189,6 +190,12 @@ pytest -q
 ## 11. API Summary
 
 All module routes are mounted under the `/api` prefix in `main.py` (example: `GET /api/users/list`). Swagger/ReDoc include the full paths.
+
+## 13. Domain Documentation
+
+- Current backend business rules reference:
+  - `docs/backend-current-logic.md`
+- This file should be updated whenever business logic, transitions, side effects, costing, or movement history semantics change.
 
 ### BFF (Dashboard / aggregations)
 
