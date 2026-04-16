@@ -56,18 +56,7 @@ def get_system_summary(
         clients=_count(session, Client, Client.is_active == True),  # noqa: E712
         warehouses=_count(session, Warehouse, Warehouse.is_active == True),  # noqa: E712
         users=_count(session, User, User.is_active == True),  # noqa: E712
-        categories=_count(
-            session,
-            Category,
-            Category.is_active == True,  # noqa: E712
-            Category.parent_id.is_(None),
-        ),
-        subcategories=_count(
-            session,
-            Category,
-            Category.is_active == True,  # noqa: E712
-            Category.parent_id.is_not(None),
-        ),
+        categories=_count(session, Category, Category.is_active == True),  # noqa: E712
         brands=_count(session, Brand, Brand.is_active == True),  # noqa: E712
     )
 
@@ -124,4 +113,3 @@ def get_system_summary(
         invoices=invoices,
         sales=sales,
     )
-

@@ -75,7 +75,6 @@ erDiagram
 
     BRAND ||--o{ PRODUCT : brand_id
     CATEGORY ||--o{ PRODUCT : category_id
-    CATEGORY ||--o{ PRODUCT : subcategory_id
     WAREHOUSE ||--o{ INVENTORY : warehouse_id
     PRODUCT ||--o{ INVENTORY : product_id
     WAREHOUSE ||--o{ INVOICE : warehouse_id
@@ -97,17 +96,16 @@ erDiagram
 - `brand.name` es único.
 
 #### Category
-- `category.parent_id` existe como campo, pero hoy no está amarrado con FK.
-- El sistema usa `category_id` y `subcategory_id` en `product`.
+- `category` ya no maneja jerarquía interna.
+- Existe un solo nivel de clasificación.
 - No existe una validación fuerte que obligue a que la subcategoría pertenezca a la categoría seleccionada.
 
 #### Product
-- Tiene `category_id`, `subcategory_id`, `brand_id`.
+- Tiene `category_id` y `brand_id`.
 - `product.code` es único.
-- `subcategory_id` es opcional.
 
 Implicación:
-- El catálogo permite representar categoría y subcategoría, pero la integridad jerárquica depende de lógica de aplicación y hoy está incompleta.
+- El catálogo quedó simplificado a una sola categoría por producto.
 
 ### 2. Inventory
 
@@ -124,7 +122,7 @@ Implicación:
 
 #### Costos
 - `avg_cost` y `last_cost` existen en `inventory`.
-- Hoy siguen almacenados como `float`.
+- Se almacenan como `Decimal` / `Numeric` para evitar pérdida de precisión.
 
 #### Creación manual
 - Crear inventario registra movimiento manual de entrada si `stock > 0`.
@@ -218,7 +216,15 @@ Implicación:
 
 #### Cargos adicionales
 - `general_expenses` se persiste como `logistic_tax`.
-- Actualmente hay trabajo local en curso para manejar también `approximate_profit_rate`.
+- `approximate_profit_rate` también forma parte del modelo vigente.
+- Decisión actual del dominio:
+  - `general_expenses` es porcentaje.
+  - `approximate_profit_rate` es porcentaje.
+  - El frontend puede calcularlos para visualización, pero backend los mantiene y responde como tasas porcentuales.
+- En el estado actual ambos campos se interpretan como porcentajes sobre `subtotal` en la respuesta:
+  - `general_expenses_total = subtotal * general_expenses / 100`
+  - `approximate_profit_total = subtotal * approximate_profit_rate / 100`
+  - `total = subtotal + general_expenses_total + approximate_profit_total`
 
 ### 5. Sales
 
@@ -320,7 +326,6 @@ Implicación:
 - El promedio de costo no representa necesariamente el costo real del stock vigente.
 - Un inventario inactivo todavía puede terminar en una venta si se referencia por `id`.
 - `quantity_units` en ventas no significa realmente unidades físicas en la lógica actual.
-- La jerarquía categoría/subcategoría no está cerrada a nivel de integridad.
 - El histórico de movimientos mezcla dos criterios distintos de reversa.
 
 ### Riesgos de reporte
@@ -340,6 +345,16 @@ Cambios backend actualmente presentes en el workspace:
 - Soporte en curso para `approximate_profit_rate` en facturas.
 - Migración local nueva:
   - `alembic/versions/0009_add_invoice_approximate_profit_rate.py`
+  - `alembic/versions/r010_inventory_costs_to_decimal.py`
+  - `alembic/versions/r011_remove_subcategory_and_category_parent.py`
+
+## Decisiones aplicadas al dominio
+
+Decisiones ya implementadas en backend:
+
+- `subcategory` fue eliminada del dominio.
+- `parent category` dejó de existir como concepto de negocio.
+- `category` quedó como único nivel de clasificación.
 
 ## Línea base para la próxima etapa
 
@@ -370,3 +385,5 @@ Si el cambio modifica comportamiento, agregar además una nota breve al final co
 ## Change Log
 
 - 2026-04-15: se documentó el estado actual de inventario, facturas, ventas e históricos antes del refactor de reglas de negocio.
+- 2026-04-15: `inventory.avg_cost` y `inventory.last_cost` se migraron a `Decimal` / `Numeric(12, 6)` en modelo, schemas y migración de base de datos.
+- 2026-04-15: se eliminó `subcategory` del backend y `category` quedó como único nivel de clasificación.

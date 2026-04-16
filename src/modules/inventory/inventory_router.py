@@ -185,7 +185,6 @@ def delete_inventory(
 )
 def generate_all_inventory_pdf(
     categoria: Optional[str] = Query(None, description="Filtra por categoría"),
-    subcategoria: Optional[str] = Query(None, description="Filtra por subcategoría"),
     marca: Optional[str] = Query(None, description="Filtra por marca"),
     almacen: Optional[str] = Query(None, description="Filtra por almacén"),
     buscar: Optional[str] = Query(None, description="Buscar por nombre o código"),
@@ -198,7 +197,6 @@ def generate_all_inventory_pdf(
     try:
         filters = {
             "categoria": categoria,
-            "subcategoria": subcategoria,
             "marca": marca,
             "almacen": almacen,
             "buscar": buscar,

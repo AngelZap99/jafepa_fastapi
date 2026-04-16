@@ -65,7 +65,6 @@ class SeedConfig:
     insert_mode: str  # append|skip|upsert (catalogs/products)
 
     categories: int
-    subcategories_per_category: int
     brands: int
     warehouses: int
     clients: int
@@ -119,49 +118,24 @@ def _upsert(
 def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -> None:
     insert_mode = config.insert_mode
 
-    existing_roots = (
-        session.query(Category).filter(Category.parent_id == None).count()  # noqa: E711
-    )
+    existing_categories = session.query(Category).count()
 
-    # Categories (roots)
-    root_categories: list[Category] = []
     for i in range(1, config.categories + 1):
-        idx = existing_roots + i
+        idx = existing_categories + i
         name = f"Category {idx}"
-        obj, _ = _upsert(
+        _upsert(
             session=session,
             model=Category,
-            unique_filters={"name": name, "parent_id": None},
+            unique_filters={"name": name},
             create_kwargs={
                 "name": name,
-                "description": f"Root category {idx}",
-                "parent_id": None,
+                "description": f"Category {idx}",
             },
-            update_kwargs={"description": f"Root category {idx}", "is_active": True},
+            update_kwargs={"description": f"Category {idx}", "is_active": True},
             insert_mode=insert_mode,
         )
-        root_categories.append(obj)
 
     session.commit()
-    for c in root_categories:
-        session.refresh(c)
-
-    # Subcategories (same table; parent_id points to root category)
-    for parent in root_categories:
-        for j in range(1, config.subcategories_per_category + 1):
-            name = f"{parent.name} / Sub {j}"
-            _upsert(
-                session=session,
-                model=Category,
-                unique_filters={"name": name, "parent_id": parent.id},
-                create_kwargs={
-                    "name": name,
-                    "description": f"Subcategory {j} of {parent.name}",
-                    "parent_id": parent.id,
-                },
-                update_kwargs={"description": f"Subcategory {j} of {parent.name}", "is_active": True},
-                insert_mode=insert_mode,
-            )
 
     # Brands
     existing_brands = session.query(Brand).count()
@@ -215,10 +189,9 @@ def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -
 def seed_products(*, session: Session, rng: random.Random, config: SeedConfig) -> None:
     insert_mode = config.insert_mode
 
-    roots = session.query(Category).filter(Category.parent_id == None).all()  # noqa: E711
-    subs = session.query(Category).filter(Category.parent_id != None).all()  # noqa: E711
+    categories = session.query(Category).all()
     brands = session.query(Brand).all()
-    if not roots or not brands:
+    if not categories or not brands:
         raise RuntimeError("Missing catalogs: seed catalogs before products.")
 
     existing_products = session.query(Product).count()
@@ -226,8 +199,7 @@ def seed_products(*, session: Session, rng: random.Random, config: SeedConfig) -
         idx = existing_products + i
         code = f"SKU{idx:05d}"
         name = f"Product {idx}"
-        category = rng.choice(roots)
-        subcategory = rng.choice(subs) if subs and rng.random() < 0.7 else None
+        category = rng.choice(categories)
         brand = rng.choice(brands)
 
         _upsert(
@@ -239,7 +211,6 @@ def seed_products(*, session: Session, rng: random.Random, config: SeedConfig) -
                 "code": code,
                 "description": f"Seeded product {idx}",
                 "category_id": category.id,
-                "subcategory_id": subcategory.id if subcategory else None,
                 "brand_id": brand.id,
                 "image": None,
                 "is_active": True,
@@ -248,7 +219,6 @@ def seed_products(*, session: Session, rng: random.Random, config: SeedConfig) -
                 "name": name,
                 "description": f"Seeded product {idx}",
                 "category_id": category.id,
-                "subcategory_id": subcategory.id if subcategory else None,
                 "brand_id": brand.id,
                 "image": None,
                 "is_active": True,

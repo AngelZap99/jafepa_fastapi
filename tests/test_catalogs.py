@@ -25,7 +25,7 @@ def test_category_catalog_endpoints(client, catalog_seed):
 
     created = client.post(
         "/api/categories/create",
-        json={"name": "Category Test", "description": "Root", "parent_id": None},
+        json={"name": "Category Test", "description": "Root"},
     )
     assert created.status_code == 201, created.text
     category_id = created.json()["id"]
@@ -200,8 +200,8 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
         Inventory(
             stock=5,
             box_size=1,
-            avg_cost=1.0,
-            last_cost=1.0,
+            avg_cost=Decimal("1.00"),
+            last_cost=Decimal("1.00"),
             warehouse_id=warehouse_id,
             product_id=product_id,
             is_active=True,
@@ -229,3 +229,4 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
     deleted = client.delete(f"/api/products/delete/{product_id}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["is_active"] is False
+from decimal import Decimal

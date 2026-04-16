@@ -11,15 +11,8 @@ class CategoryRepository:
     def get(self, category_id: int) -> Category | None:
         return self.db.query(Category).filter(Category.id == category_id).first()
 
-    def get_by_name_and_parent(self, name: str, parent_id: int | None) -> Category | None:
-        return (
-            self.db.query(Category)
-            .filter(
-                Category.name == name,
-                Category.parent_id == parent_id,
-            )
-            .first()
-        )
+    def get_by_name(self, name: str) -> Category | None:
+        return self.db.query(Category).filter(Category.name == name).first()
 
     def list(self, skip: int = 0, limit: int | None = None) -> list[Category]:
         q = self.db.query(Category).offset(skip)

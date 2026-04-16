@@ -27,15 +27,15 @@ class InventoryBase(BaseModel):
 
 
 class InventoryCosts(BaseModel):
-    avg_cost: float = Field(ge=0)
-    last_cost: float = Field(ge=0)
+    avg_cost: Decimal = Field(ge=Decimal("0.00"))
+    last_cost: Decimal = Field(ge=Decimal("0.00"))
 
     @field_validator("avg_cost", "last_cost", mode="before")
     @classmethod
     def normalize_cost(cls, value):
         if value is None:
             return value
-        return float(value)
+        return Decimal(str(value))
 
 
 #######################################
@@ -67,7 +67,6 @@ class InventoryCreateWithProduct(BaseModel):
     code: str = Field(min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=500)
     category_id: int = Field(gt=0)
-    subcategory_id: Optional[int] = Field(default=None, gt=0)
     brand_id: int = Field(gt=0)
     warehouse_id: int = Field(gt=0)
     stock: int = Field(ge=0)
@@ -88,7 +87,6 @@ class InventoryCreateWithProduct(BaseModel):
         code: str = Form(...),
         description: Optional[str] = Form(None),
         category_id: int = Form(...),
-        subcategory_id: Optional[int] = Form(None),
         brand_id: int = Form(...),
         warehouse_id: int = Form(...),
         stock: int = Form(...),
@@ -100,7 +98,6 @@ class InventoryCreateWithProduct(BaseModel):
             code=code,
             description=description,
             category_id=category_id,
-            subcategory_id=subcategory_id,
             brand_id=brand_id,
             warehouse_id=warehouse_id,
             stock=stock,

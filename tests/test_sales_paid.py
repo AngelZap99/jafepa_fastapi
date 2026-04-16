@@ -34,7 +34,6 @@ def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventor
         code="PROD-001",
         description=None,
         category_id=category.id,
-        subcategory_id=None,
         brand_id=brand.id,
         image=None,
     )
@@ -44,8 +43,8 @@ def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventor
     inventory = Inventory(
         stock=stock,
         box_size=1,
-        avg_cost=1.0,
-        last_cost=1.0,
+        avg_cost=Decimal("1.00"),
+        last_cost=Decimal("1.00"),
         warehouse_id=warehouse.id,
         product_id=product.id,
     )
@@ -59,7 +58,7 @@ def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventor
     return inventory, client
 
 
-def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session):
+def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_headers):
     starting_stock = 10
     quantity = 3
     unit_price = Decimal("2.50")
@@ -87,7 +86,11 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session):
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    paid = client.put(f"/api/sales/update-status/{sale_id}", json={"status": "PAID"})
+    paid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
     assert paid.status_code == 200, paid.text
     paid_sale = paid.json()
 
@@ -115,7 +118,7 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session):
     assert movement.new_stock == starting_stock - quantity
 
 
-def test_marking_sale_paid_twice_is_idempotent(client, db_session):
+def test_marking_sale_paid_twice_is_idempotent(client, db_session, auth_headers):
     starting_stock = 5
     quantity = 2
 
@@ -135,10 +138,18 @@ def test_marking_sale_paid_twice_is_idempotent(client, db_session):
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    first = client.put(f"/api/sales/update-status/{sale_id}", json={"status": "PAID"})
+    first = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
     assert first.status_code == 200, first.text
 
-    second = client.put(f"/api/sales/update-status/{sale_id}", json={"status": "PAID"})
+    second = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
     assert second.status_code == 200, second.text
 
     db_session.expire_all()
@@ -154,7 +165,7 @@ def test_marking_sale_paid_twice_is_idempotent(client, db_session):
     assert len(movements) == 1
 
 
-def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session):
+def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session, auth_headers):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=2)
 
     created = client.post(
@@ -178,7 +189,11 @@ def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session):
     db_session.add(inv)
     db_session.commit()
 
-    paid = client.put(f"/api/sales/update-status/{sale_id}", json={"status": "PAID"})
+    paid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
     assert paid.status_code == 409, paid.text
     assert paid.json()["detail"] == "Inventory stock cannot be negative"
 
@@ -194,7 +209,7 @@ def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session):
     assert len(movements) == 0
 
 
-def test_paid_sale_line_can_be_updated_in_place(client, db_session):
+def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers):
     starting_stock = 120
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=starting_stock)
 
@@ -219,7 +234,11 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session):
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    paid = client.put(f"/api/sales/update-status/{sale_id}", json={"status": "PAID"})
+    paid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
     assert paid.status_code == 200, paid.text
 
     updated = client.put(
@@ -252,7 +271,7 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session):
     assert movements[-1].unit_cost == Decimal("90.00")
 
 
-def test_paid_sale_accepts_add_and_delete_line(client, db_session):
+def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers):
     inv1, client_obj = _seed_inventory_and_client(db_session, stock=120)
 
     # Seed a second inventory for the same client/warehouse flow.
@@ -264,7 +283,6 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session):
         code="PROD-002",
         description=None,
         category_id=category_obj.id,
-        subcategory_id=None,
         brand_id=brand_obj.id,
         image=None,
     )
@@ -273,8 +291,8 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session):
     inv2 = Inventory(
         stock=60,
         box_size=12,
-        avg_cost=1.0,
-        last_cost=1.0,
+        avg_cost=Decimal("1.00"),
+        last_cost=Decimal("1.00"),
         warehouse_id=warehouse_obj.id,
         product_id=product.id,
     )
@@ -301,7 +319,11 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session):
     sale = created.json()
     sale_id = sale["id"]
 
-    paid = client.put(f"/api/sales/update-status/{sale_id}", json={"status": "PAID"})
+    paid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
     assert paid.status_code == 200, paid.text
 
     added = client.post(

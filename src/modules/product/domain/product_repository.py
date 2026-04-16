@@ -11,7 +11,6 @@ class ProductRepository:
             self.db.query(Product)
             .options(
                 selectinload(Product.category),
-                selectinload(Product.subcategory),
                 selectinload(Product.brand),
             )
             .offset(skip)
@@ -25,7 +24,6 @@ class ProductRepository:
             self.db.query(Product)
             .options(
                 selectinload(Product.category),
-                selectinload(Product.subcategory),
                 selectinload(Product.brand),
             )
             .filter(Product.id == product_id)

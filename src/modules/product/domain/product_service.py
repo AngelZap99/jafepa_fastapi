@@ -68,7 +68,6 @@ class ProductService:
             code=payload.code,
             description=payload.description,
             category_id=payload.category_id,
-            subcategory_id=payload.subcategory_id,
             brand_id=payload.brand_id,
             image=payload.image,
             is_active=True,

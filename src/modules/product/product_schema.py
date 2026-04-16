@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import Form
@@ -18,7 +19,6 @@ class ProductBase(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
 
     category_id: int
-    subcategory_id: Optional[int] = None
     brand_id: int
 
     # This stays as URL in DB/response. The file upload will be handled in router/service.
@@ -36,7 +36,6 @@ class ProductBase(BaseModel):
         code: str = Form(...),
         description: Optional[str] = Form(None),
         category_id: int = Form(...),
-        subcategory_id: Optional[int] = Form(None),
         brand_id: int = Form(...),
         image: Optional[str] = Form(None),
     ) -> "ProductBase":
@@ -45,7 +44,6 @@ class ProductBase(BaseModel):
             code=code,
             description=description,
             category_id=category_id,
-            subcategory_id=subcategory_id,
             brand_id=brand_id,
             image=image,
         )
@@ -60,7 +58,6 @@ class ProductCreate(ProductBase):
         code: str = Form(...),
         description: Optional[str] = Form(None),
         category_id: int = Form(...),
-        subcategory_id: Optional[int] = Form(None),
         brand_id: int = Form(...),
         image: Optional[str] = Form(None),
     ) -> "ProductCreate":
@@ -69,7 +66,6 @@ class ProductCreate(ProductBase):
             code=code,
             description=description,
             category_id=category_id,
-            subcategory_id=subcategory_id,
             brand_id=brand_id,
             image=image,
         )
@@ -81,7 +77,6 @@ class ProductUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=500)
 
     category_id: Optional[int] = None
-    subcategory_id: Optional[int] = None
     brand_id: Optional[int] = None
 
     image: Optional[str] = Field(default=None, max_length=500)
@@ -99,7 +94,6 @@ class ProductUpdate(BaseModel):
         code: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
         category_id: Optional[int] = Form(None),
-        subcategory_id: Optional[int] = Form(None),
         brand_id: Optional[int] = Form(None),
         image: Optional[str] = Form(None),
         is_active: Optional[bool] = Form(None),
@@ -109,7 +103,6 @@ class ProductUpdate(BaseModel):
             code=code,
             description=description,
             category_id=category_id,
-            subcategory_id=subcategory_id,
             brand_id=brand_id,
             image=image,
             is_active=is_active,
@@ -141,7 +134,6 @@ class ProductResponse(ProductBase):
 
     # Relaciones
     category: Optional[CategoryResponse] = None
-    subcategory: Optional[CategoryResponse] = None
     brand: Optional[BrandResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -156,8 +148,8 @@ class InventoryStockItem(BaseModel):
     box_size: int
     stock: int
     available_boxes: int = 0
-    avg_cost: float
-    last_cost: float
+    avg_cost: Decimal
+    last_cost: Decimal
     sales_last_price: Optional[float] = None
     sales_avg_price: Optional[float] = None
     is_active: bool

@@ -23,7 +23,6 @@ def test_invoice_create_supports_optional_dates_general_expenses_and_unit_price(
         code="TAL-001",
         description="Taladro industrial",
         category_id=category.id,
-        subcategory_id=None,
         brand_id=brand.id,
         image=None,
     )
@@ -62,7 +61,9 @@ def test_invoice_create_supports_optional_dates_general_expenses_and_unit_price(
     assert data["arrival_date"] is None
     assert Decimal(str(data["general_expenses"])) == Decimal("15.00")
     assert Decimal(str(data["subtotal"])) == Decimal("240.00")
-    assert Decimal(str(data["total"])) == Decimal("255.00")
+    assert Decimal(str(data["general_expenses_total"])) == Decimal("36.00")
+    assert Decimal(str(data["approximate_profit_total"])) == Decimal("0.00")
+    assert Decimal(str(data["total"])) == Decimal("276.00")
 
     line = data["lines"][0]
     assert line["price_type"] == "UNIT"
@@ -96,4 +97,6 @@ def test_invoice_update_accepts_general_expenses_field(client, catalog_seed):
     data = updated.json()
     assert Decimal(str(data["general_expenses"])) == Decimal("12.50")
     assert Decimal(str(data["subtotal"])) == Decimal("0.00")
-    assert Decimal(str(data["total"])) == Decimal("12.50")
+    assert Decimal(str(data["general_expenses_total"])) == Decimal("0.00")
+    assert Decimal(str(data["approximate_profit_total"])) == Decimal("0.00")
+    assert Decimal(str(data["total"])) == Decimal("0.00")

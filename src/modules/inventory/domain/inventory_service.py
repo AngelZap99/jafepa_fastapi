@@ -89,7 +89,6 @@ class InventoryService:
         *,
         category_id: int,
         brand_id: int,
-        subcategory_id: int | None,
     ) -> None:
         session = self.repository.db
 
@@ -114,18 +113,6 @@ class InventoryService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Invalid brand_id reference",
             )
-
-        if subcategory_id is not None:
-            subcategory_exists = (
-                session.query(Category.id)
-                .filter(Category.id == subcategory_id, Category.is_active == True)  # noqa: E712
-                .first()
-            )
-            if subcategory_exists is None:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Invalid subcategory_id reference",
-                )
 
     def _raise_conflict(self, message: str, errors: list[dict]) -> None:
         raise HTTPException(
@@ -194,7 +181,7 @@ class InventoryService:
             event_type=event_type,
             movement_type=movement_type,
             quantity=quantity,
-            unit_cost=Decimal(str(inventory.last_cost)),
+            unit_cost=inventory.last_cost,
             prev_stock=prev_stock,
             new_stock=new_stock,
             inventory_id=inventory.id,
@@ -265,8 +252,8 @@ class InventoryService:
         unitary_inventory = Inventory(
             stock=0,
             box_size=1,
-            avg_cost=0,
-            last_cost=0,
+            avg_cost=Decimal("0.00"),
+            last_cost=Decimal("0.00"),
             warehouse_id=warehouse_id,
             product_id=product_id,
             is_active=True,
@@ -315,8 +302,8 @@ class InventoryService:
         inventory = Inventory(
             stock=payload.stock,
             box_size=payload.box_size,
-            avg_cost=0,
-            last_cost=0,
+            avg_cost=Decimal("0.00"),
+            last_cost=Decimal("0.00"),
             warehouse_id=payload.warehouse_id,
             product_id=payload.product_id,
             is_active=payload.is_active,
@@ -359,7 +346,6 @@ class InventoryService:
         self._ensure_category_refs_exist(
             category_id=payload.category_id,
             brand_id=payload.brand_id,
-            subcategory_id=payload.subcategory_id,
         )
 
         product_conflicts = product_repository.check_conflicts(payload)
@@ -374,7 +360,6 @@ class InventoryService:
             code=payload.code,
             description=payload.description,
             category_id=payload.category_id,
-            subcategory_id=payload.subcategory_id,
             brand_id=payload.brand_id,
             image=None,
             is_active=True,
@@ -401,8 +386,8 @@ class InventoryService:
             inventory = Inventory(
                 stock=payload.stock,
                 box_size=payload.box_size,
-                avg_cost=0,
-                last_cost=0,
+                avg_cost=Decimal("0.00"),
+                last_cost=Decimal("0.00"),
                 warehouse_id=payload.warehouse_id,
                 product_id=product.id,
                 is_active=payload.is_active,

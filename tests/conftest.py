@@ -85,7 +85,7 @@ def catalog_seed(db_session):
     from src.shared.models.client.client_model import Client
     from src.shared.models.warehouse.warehouse_model import Warehouse
 
-    category = Category(name="Category Seed", description=None, parent_id=None)
+    category = Category(name="Category Seed", description=None)
     brand = Brand(name="Brand Seed")
     warehouse = Warehouse(
         name="Warehouse Seed",

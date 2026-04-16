@@ -129,8 +129,8 @@ class InvoiceService:
                 inventory = Inventory(
                     stock=0,
                     box_size=line.box_size,
-                    avg_cost=float(unit_cost),
-                    last_cost=float(unit_cost),
+                    avg_cost=unit_cost,
+                    last_cost=unit_cost,
                     warehouse_id=invoice.warehouse_id,
                     product_id=line.product_id,
                     is_active=True,
@@ -144,14 +144,14 @@ class InvoiceService:
             prev_stock = inventory.stock
             new_stock = prev_stock + quantity
             inventory.stock = new_stock
-            inventory.last_cost = float(unit_cost)
-            inventory.avg_cost = float(
+            inventory.last_cost = unit_cost
+            inventory.avg_cost = (
                 self._compute_recent_avg_cost(
-                movement_repository=movement_repository,
-                inventory_id=inventory.id,
-                incoming_qty=quantity,
-                incoming_unit_cost=unit_cost,
-            )
+                    movement_repository=movement_repository,
+                    inventory_id=inventory.id,
+                    incoming_qty=quantity,
+                    incoming_unit_cost=unit_cost,
+                )
             )
 
             movement = InventoryMovement(
@@ -217,12 +217,12 @@ class InvoiceService:
             )
             latest_cost = movement_repository.get_latest_in_unit_cost(inventory.id)
             if recent_qty > 0:
-                inventory.avg_cost = float(recent_cost / Decimal(recent_qty))
+                inventory.avg_cost = recent_cost / Decimal(recent_qty)
             elif latest_cost is not None:
-                inventory.avg_cost = float(latest_cost)
+                inventory.avg_cost = latest_cost
 
             if latest_cost is not None:
-                inventory.last_cost = float(latest_cost)
+                inventory.last_cost = latest_cost
 
             movement = InventoryMovement(
                 movement_group_id=movement_group_id,

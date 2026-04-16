@@ -1,3 +1,4 @@
+from decimal import Decimal
 from types import SimpleNamespace
 
 from src.modules.inventory.domain.pdf_generator import PDFGenerator
@@ -27,7 +28,7 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
         raising=True,
     )
 
-    category = Category(name="Categoria PDF", description="Root", parent_id=None)
+    category = Category(name="Categoria PDF", description="Root")
     brand = Brand(name="Marca PDF")
     warehouse = Warehouse(
         name="Warehouse PDF",
@@ -43,21 +44,11 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
     db_session.refresh(brand)
     db_session.refresh(warehouse)
 
-    subcategory = Category(
-        name="Subcategoria PDF",
-        description="Child",
-        parent_id=category.id,
-    )
-    db_session.add(subcategory)
-    db_session.commit()
-    db_session.refresh(subcategory)
-
     matching_product = Product(
         name="Bocina RINO",
         code="BR-100",
         description="Producto incluido",
         category_id=category.id,
-        subcategory_id=subcategory.id,
         brand_id=brand.id,
         image=None,
     )
@@ -66,7 +57,6 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
         code="OT-200",
         description="Producto excluido",
         category_id=category.id,
-        subcategory_id=subcategory.id,
         brand_id=brand.id,
         image=None,
     )
@@ -79,8 +69,8 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
     matching_inventory = Inventory(
         stock=8,
         box_size=2,
-        avg_cost=10.5,
-        last_cost=11.0,
+        avg_cost=Decimal("10.50"),
+        last_cost=Decimal("11.00"),
         warehouse_id=warehouse.id,
         product_id=matching_product.id,
         is_active=True,
@@ -88,8 +78,8 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
     other_inventory = Inventory(
         stock=3,
         box_size=1,
-        avg_cost=5.0,
-        last_cost=5.5,
+        avg_cost=Decimal("5.00"),
+        last_cost=Decimal("5.50"),
         warehouse_id=warehouse.id,
         product_id=other_product.id,
         is_active=True,
@@ -105,7 +95,6 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
         params={
             "almacen": warehouse.name,
             "categoria": category.name,
-            "subcategoria": subcategory.name,
             "marca": brand.name,
             "buscar": "rino",
         },
@@ -147,7 +136,7 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
         raising=True,
     )
 
-    category = Category(name="Categoria PDF Fallback", description="Root", parent_id=None)
+    category = Category(name="Categoria PDF Fallback", description="Root")
     brand = Brand(name="Marca PDF Fallback")
     warehouse_a = Warehouse(
         name="Warehouse A",
@@ -176,7 +165,6 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
         code="BR-FB",
         description="Producto de prueba",
         category_id=category.id,
-        subcategory_id=None,
         brand_id=brand.id,
         image=None,
     )
@@ -187,8 +175,8 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
     inventory_a = Inventory(
         stock=2,
         box_size=1,
-        avg_cost=10.0,
-        last_cost=12.0,
+        avg_cost=Decimal("10.00"),
+        last_cost=Decimal("12.00"),
         warehouse_id=warehouse_a.id,
         product_id=product.id,
         is_active=True,
@@ -196,8 +184,8 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
     inventory_b = Inventory(
         stock=4,
         box_size=1,
-        avg_cost=10.0,
-        last_cost=12.0,
+        avg_cost=Decimal("10.00"),
+        last_cost=Decimal("12.00"),
         warehouse_id=warehouse_b.id,
         product_id=product.id,
         is_active=True,
@@ -242,7 +230,7 @@ def test_inventory_pdf_supports_excluding_multiple_ids_with_csv(
         raising=True,
     )
 
-    category = Category(name="Categoria Exclude CSV", description="Root", parent_id=None)
+    category = Category(name="Categoria Exclude CSV", description="Root")
     brand = Brand(name="Marca Exclude CSV")
     warehouse = Warehouse(
         name="Warehouse Exclude CSV",
@@ -265,7 +253,6 @@ def test_inventory_pdf_supports_excluding_multiple_ids_with_csv(
             code=f"CSV-{index}",
             description="Producto de prueba",
             category_id=category.id,
-            subcategory_id=None,
             brand_id=brand.id,
             image=None,
         )
@@ -280,8 +267,8 @@ def test_inventory_pdf_supports_excluding_multiple_ids_with_csv(
         inventory = Inventory(
             stock=index,
             box_size=1,
-            avg_cost=0,
-            last_cost=0,
+            avg_cost=Decimal("0.00"),
+            last_cost=Decimal("0.00"),
             warehouse_id=warehouse.id,
             product_id=product.id,
             is_active=True,
@@ -360,8 +347,8 @@ def test_pdf_generator_uses_real_warehouse_header_instead_of_generic_placeholder
     item = SimpleNamespace(
         product=SimpleNamespace(name="Bocina RINO", code="BR-10", image=None),
         stock=5,
-        avg_cost=10.0,
-        last_cost=12.0,
+        avg_cost=Decimal("10.00"),
+        last_cost=Decimal("12.00"),
         box_size=2,
     )
 
@@ -420,8 +407,8 @@ def test_pdf_generator_uses_nine_products_per_page(monkeypatch):
         SimpleNamespace(
             product=SimpleNamespace(name=f"Producto {index}", code=f"COD-{index}", image=None),
             stock=index,
-            avg_cost=10.0,
-            last_cost=12.0,
+            avg_cost=Decimal("10.00"),
+            last_cost=Decimal("12.00"),
             box_size=2,
         )
         for index in range(1, 11)

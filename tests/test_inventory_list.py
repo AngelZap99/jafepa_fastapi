@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+
 def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_session):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -5,7 +8,7 @@ def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_sess
     from src.shared.models.product.product_model import Product
     from src.shared.models.warehouse.warehouse_model import Warehouse
 
-    category = Category(name="Category List", description="Root", parent_id=None)
+    category = Category(name="Category List", description="Root")
     brand = Brand(name="Brand List")
     warehouse_a = Warehouse(
         name="Almacen Norte",
@@ -34,7 +37,6 @@ def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_sess
         code="BR-LIST",
         description="Producto de prueba",
         category_id=category.id,
-        subcategory_id=None,
         brand_id=brand.id,
         image=None,
     )
@@ -45,8 +47,8 @@ def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_sess
     inventory_a = Inventory(
         stock=5,
         box_size=1,
-        avg_cost=100.0,
-        last_cost=120.0,
+        avg_cost=Decimal("100.00"),
+        last_cost=Decimal("120.00"),
         warehouse_id=warehouse_a.id,
         product_id=product.id,
         is_active=True,
@@ -54,8 +56,8 @@ def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_sess
     inventory_b = Inventory(
         stock=9,
         box_size=1,
-        avg_cost=100.0,
-        last_cost=120.0,
+        avg_cost=Decimal("100.00"),
+        last_cost=Decimal("120.00"),
         warehouse_id=warehouse_b.id,
         product_id=product.id,
         is_active=True,

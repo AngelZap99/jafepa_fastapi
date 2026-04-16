@@ -12,7 +12,6 @@ class CatalogCounts(BaseModel):
     users: int
 
     categories: int
-    subcategories: int
     brands: int
 
 
@@ -36,4 +35,3 @@ class SystemSummaryResponse(BaseModel):
     catalogs: CatalogCounts
     invoices: InvoiceStatusCounts
     sales: SaleStatusCounts
-

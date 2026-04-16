@@ -196,7 +196,6 @@ def seed(
     seed_value: int = typer.Option(123, help="Deterministic RNG seed."),
     # ---- catalogs
     categories: int = typer.Option(6, min=0),
-    subcategories_per_category: int = typer.Option(3, min=0),
     brands: int = typer.Option(8, min=0),
     warehouses: int = typer.Option(2, min=0),
     clients: int = typer.Option(20, min=0),
@@ -239,7 +238,6 @@ def seed(
     config = SeedConfig(
         insert_mode=insert_mode.value,
         categories=categories,
-        subcategories_per_category=subcategories_per_category,
         brands=brands,
         warehouses=warehouses,
         clients=clients,

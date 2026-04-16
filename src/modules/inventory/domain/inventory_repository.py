@@ -67,18 +67,6 @@ class InventoryRepository:
                     category_alias.name.ilike(categoria.strip())
                 )
 
-        subcategoria = filters.get("subcategoria")
-        if subcategoria is not None and subcategoria != "":
-            ensure_product_join()
-            subcategory_id = self._parse_int_filter(subcategoria)
-            if subcategory_id is not None:
-                query = query.filter(Product.subcategory_id == subcategory_id)
-            else:
-                subcategory_alias = aliased(Category)
-                query = query.join(subcategory_alias, Product.subcategory).filter(
-                    subcategory_alias.name.ilike(subcategoria.strip())
-                )
-
         marca = filters.get("marca")
         if marca is not None and marca != "":
             ensure_product_join()
@@ -106,7 +94,6 @@ class InventoryRepository:
             self.db.query(Inventory)
             .options(
                 selectinload(Inventory.product).selectinload(Product.category),
-                selectinload(Inventory.product).selectinload(Product.subcategory),
                 selectinload(Inventory.product).selectinload(Product.brand),
                 selectinload(Inventory.warehouse),
             )
@@ -120,7 +107,6 @@ class InventoryRepository:
     def list_all(self, filters: dict = None):
         query = self.db.query(Inventory).options(
             joinedload(Inventory.product).joinedload(Product.category),
-            joinedload(Inventory.product).joinedload(Product.subcategory),
             joinedload(Inventory.product).joinedload(Product.brand),
             joinedload(Inventory.warehouse),
         )
@@ -157,7 +143,6 @@ class InventoryRepository:
             self.db.query(Inventory)
             .options(
                 selectinload(Inventory.product).selectinload(Product.category),
-                selectinload(Inventory.product).selectinload(Product.subcategory),
                 selectinload(Inventory.product).selectinload(Product.brand),
                 selectinload(Inventory.warehouse),
             )

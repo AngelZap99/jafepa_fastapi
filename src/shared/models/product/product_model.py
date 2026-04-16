@@ -1,4 +1,3 @@
-# src/shared/models/product/product_model.py
 from sqlmodel import Field, Relationship
 from typing import Optional, List
 from sqlalchemy.orm import Mapped
@@ -16,25 +15,13 @@ class Product(MyBaseModel, table=True):
     description: Optional[str] = Field(default=None, max_length=500)
 
     category_id: int = Field(foreign_key="category.id")
-    subcategory_id: Optional[int] = Field(default=None, foreign_key="category.id")
     brand_id: int = Field(foreign_key="brand.id")
 
     image: Optional[str] = Field(default=None, max_length=500)
 
     category: Mapped[Optional[Category]] = Relationship(
         back_populates="products",
-        sa_relationship_kwargs={
-            "lazy": "joined",
-            "foreign_keys": "[Product.category_id]",
-        },
-    )
-
-    subcategory: Mapped[Optional[Category]] = Relationship(
-        back_populates="sub_products",
-        sa_relationship_kwargs={
-            "lazy": "joined",
-            "foreign_keys": "[Product.subcategory_id]",
-        },
+        sa_relationship_kwargs={"lazy": "joined"},
     )
 
     brand: Mapped[Optional[Brand]] = Relationship(

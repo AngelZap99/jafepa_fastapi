@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import HTTPException
 
 from src.modules.inventory.domain.inventory_service import InventoryService
@@ -20,11 +22,10 @@ PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 def _seed_inventory_catalog(
     db_session,
     *,
-    with_subcategory: bool = True,
     stock: int = 5,
     box_size: int = 2,
 ):
-    category = Category(name="Category Inventory", description="Root", parent_id=None)
+    category = Category(name="Category Inventory", description="Root")
     brand = Brand(name="Brand Inventory")
     warehouse = Warehouse(
         name="Warehouse Inventory",
@@ -40,23 +41,11 @@ def _seed_inventory_catalog(
     db_session.refresh(brand)
     db_session.refresh(warehouse)
 
-    subcategory = None
-    if with_subcategory:
-        subcategory = Category(
-            name="Subcategory Inventory",
-            description="Child",
-            parent_id=category.id,
-        )
-        db_session.add(subcategory)
-        db_session.commit()
-        db_session.refresh(subcategory)
-
     product = Product(
         name="Product Inventory",
         code="INV-001",
         description="Inventory product",
         category_id=category.id,
-        subcategory_id=subcategory.id if subcategory else None,
         brand_id=brand.id,
         image=None,
     )
@@ -67,8 +56,8 @@ def _seed_inventory_catalog(
     inventory = Inventory(
         stock=stock,
         box_size=box_size,
-        avg_cost=1.5,
-        last_cost=2.0,
+        avg_cost=Decimal("1.50"),
+        last_cost=Decimal("2.00"),
         warehouse_id=warehouse.id,
         product_id=product.id,
         is_active=True,
@@ -79,7 +68,6 @@ def _seed_inventory_catalog(
 
     return {
         "category": category,
-        "subcategory": subcategory,
         "brand": brand,
         "warehouse": warehouse,
         "product": product,
@@ -101,7 +89,6 @@ def test_inventory_list_returns_expanded_relations(client, db_session):
     assert item["warehouse"]["name"] == data["warehouse"].name
     assert item["product"]["id"] == data["product"].id
     assert item["product"]["category"]["id"] == data["category"].id
-    assert item["product"]["subcategory"]["id"] == data["subcategory"].id
     assert item["product"]["brand"]["id"] == data["brand"].id
 
 
@@ -112,7 +99,6 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(client
         code="INV-002",
         description="Second inventory product",
         category_id=data["category"].id,
-        subcategory_id=data["subcategory"].id,
         brand_id=data["brand"].id,
         image=None,
     )
@@ -133,8 +119,8 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(client
 
     assert response.status_code == 201, response.text
     payload = response.json()
-    assert payload["avg_cost"] == 0
-    assert payload["last_cost"] == 0
+    assert Decimal(str(payload["avg_cost"])) == Decimal("0.00")
+    assert Decimal(str(payload["last_cost"])) == Decimal("0.00")
     assert payload["product"]["id"] == product.id
     assert payload["warehouse"]["id"] == data["warehouse"].id
 
@@ -160,7 +146,6 @@ def test_inventory_create_with_zero_stock_does_not_register_movement(client, db_
         code="INV-003",
         description="Third inventory product",
         category_id=data["category"].id,
-        subcategory_id=data["subcategory"].id,
         brand_id=data["brand"].id,
         image=None,
     )
@@ -252,8 +237,8 @@ def test_inventory_update_only_changes_allowed_fields_and_records_stock_delta(cl
     assert payload["stock"] == 6
     assert payload["box_size"] == 5
     assert payload["is_active"] is False
-    assert payload["avg_cost"] == data["inventory"].avg_cost
-    assert payload["last_cost"] == data["inventory"].last_cost
+    assert Decimal(str(payload["avg_cost"])) == data["inventory"].avg_cost
+    assert Decimal(str(payload["last_cost"])) == data["inventory"].last_cost
 
     movements = (
         db_session.query(InventoryMovement)
@@ -300,7 +285,6 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
             "code": "INV-CWP-001",
             "description": "Created in one request",
             "category_id": str(data["category"].id),
-            "subcategory_id": str(data["subcategory"].id),
             "brand_id": str(data["brand"].id),
             "warehouse_id": str(data["warehouse"].id),
             "stock": "3",
@@ -313,12 +297,11 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["stock"] == 3
-    assert payload["avg_cost"] == 0
-    assert payload["last_cost"] == 0
+    assert Decimal(str(payload["avg_cost"])) == Decimal("0.00")
+    assert Decimal(str(payload["last_cost"])) == Decimal("0.00")
     assert payload["warehouse"]["id"] == data["warehouse"].id
     assert payload["product"]["code"] == "INV-CWP-001"
     assert payload["product"]["category"]["id"] == data["category"].id
-    assert payload["product"]["subcategory"]["id"] == data["subcategory"].id
     assert payload["product"]["brand"]["id"] == data["brand"].id
     assert payload["product"]["image"] == f"https://example.com/{payload['product']['id']}.png"
 
@@ -363,7 +346,6 @@ def test_inventory_create_with_product_rolls_back_product_on_conflict(
             "code": "INV-CWP-ROLLBACK",
             "description": "Rollback product",
             "category_id": str(data["category"].id),
-            "subcategory_id": str(data["subcategory"].id),
             "brand_id": str(data["brand"].id),
             "warehouse_id": str(data["warehouse"].id),
             "stock": "2",

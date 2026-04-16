@@ -1,6 +1,7 @@
-# src/shared/models/inventory/inventory_model.py
-
+from decimal import Decimal
 from typing import Optional
+
+from sqlalchemy import Numeric
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, UniqueConstraint
 
@@ -17,8 +18,12 @@ class Inventory(MyBaseModel, table=True):
 
     stock: int = Field(nullable=False)
     box_size: int = Field(nullable=False)
-    avg_cost: float = Field(nullable=False)
-    last_cost: float = Field(nullable=False)
+    avg_cost: Decimal = Field(
+        default=Decimal("0.00"), sa_type=Numeric(12, 6), nullable=False
+    )
+    last_cost: Decimal = Field(
+        default=Decimal("0.00"), sa_type=Numeric(12, 6), nullable=False
+    )
 
     warehouse_id: int = Field(foreign_key="warehouse.id")
     product_id: int = Field(foreign_key="product.id")

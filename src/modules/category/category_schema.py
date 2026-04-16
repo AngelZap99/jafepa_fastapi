@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 class CategoryBase(BaseModel):
     name: str = Field(min_length=2, max_length=250)
     description: Optional[str] = Field(default=None, max_length=500)
-    parent_id: Optional[int] = None
     is_active: bool = True
 
 ##### INPUTS
@@ -19,7 +18,6 @@ class CategoryCreate(CategoryBase):
 class CategoryUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=2, max_length=250)
     description: Optional[str] = Field(default=None, max_length=500)
-    parent_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 ##### OUTPUTS
