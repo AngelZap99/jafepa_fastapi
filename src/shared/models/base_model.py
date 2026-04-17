@@ -25,7 +25,11 @@ class MyBaseModel(SQLModel):
             "onupdate": func.now(),  # Set value on UPDATE
         },
     )
-    deleted_at: Optional[datetime] = Field(default=None, nullable=True)
+    deleted_at: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        sa_type=DateTime(timezone=True),
+    )
 
     created_by: Optional[int] = Field(
         default=None, nullable=True, foreign_key="users.id"

@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import Numeric
+from sqlalchemy import DateTime, Numeric
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship, UniqueConstraint
 
@@ -25,7 +25,11 @@ class InventoryMovement(MyBaseModel, table=True):
         ),
     )
 
-    movement_date: datetime = Field(default_factory=utcnow, nullable=False)
+    movement_date: datetime = Field(
+        default_factory=utcnow,
+        nullable=False,
+        sa_type=DateTime(timezone=True),
+    )
 
     movement_group_id: str = Field(
         default_factory=lambda: str(uuid4()), max_length=36, index=True
@@ -38,7 +42,7 @@ class InventoryMovement(MyBaseModel, table=True):
     value_type: InventoryValueType = Field(nullable=False, index=True)
 
     quantity: int = Field(nullable=False, gt=0)
-    unit_cost: Decimal = Field(sa_type=Numeric(12, 6), nullable=False)
+    unit_value: Decimal = Field(sa_type=Numeric(12, 6), nullable=False)
     prev_stock: int = Field(nullable=False)
     new_stock: int = Field(nullable=False)
 

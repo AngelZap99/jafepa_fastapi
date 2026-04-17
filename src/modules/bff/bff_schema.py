@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 
 from pydantic import BaseModel, Field
+
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 class CatalogCounts(BaseModel):
@@ -30,7 +32,7 @@ class SaleStatusCounts(BaseModel):
 class SystemSummaryResponse(BaseModel):
     days: int = Field(ge=1, le=365)
     cutoff_date: date
-    generated_at: datetime
+    generated_at: UTCDateTime
 
     catalogs: CatalogCounts
     invoices: InvoiceStatusCounts

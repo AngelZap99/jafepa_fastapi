@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import List, Optional, Literal
 
@@ -12,6 +12,7 @@ from src.shared.schemas.common_responses import (
     WarehouseLineResponse,
     ClientLineResponse,
 )
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 class SaleLineBase(BaseModel):
@@ -65,8 +66,8 @@ class SaleLineResponse(BaseModel):
     product_name: Optional[str] = None
     inventory_applied: bool
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     inventory: Optional["SaleLineInventoryRef"] = None
 
@@ -131,8 +132,8 @@ class SaleResponse(BaseModel):
     client_id: int
     client: Optional[ClientLineResponse] = None
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
     updated_by: Optional[int] = None
 
     lines: List[SaleLineResponse] = Field(default_factory=list)

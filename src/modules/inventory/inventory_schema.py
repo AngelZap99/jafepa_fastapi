@@ -1,4 +1,3 @@
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from fastapi import Form
@@ -14,6 +13,7 @@ from src.shared.enums.inventory_enums import (
     InventorySourceType,
     InventoryValueType,
 )
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 #######################################
@@ -118,8 +118,8 @@ class InventoryUpdateStatus(BaseModel):
 class InventoryResponse(InventoryBase, InventoryCosts):
     id: int
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     # Relaciones opcionales
     warehouse: Optional[WarehouseResponse] = None
@@ -147,8 +147,8 @@ class InventoryMovementFilters(BaseModel):
     movement_type: Optional[InventoryMovementType] = None
     value_type: Optional[InventoryValueType] = None
 
-    from_date: Optional[datetime] = None
-    to_date: Optional[datetime] = None
+    from_date: Optional[UTCDateTime] = None
+    to_date: Optional[UTCDateTime] = None
 
     include_inactive: bool = False
 
@@ -189,7 +189,7 @@ class InventoryMovementResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    movement_date: datetime
+    movement_date: UTCDateTime
     movement_group_id: str
     movement_sequence: int
     source_type: InventorySourceType
@@ -197,15 +197,15 @@ class InventoryMovementResponse(BaseModel):
     movement_type: InventoryMovementType
     value_type: InventoryValueType
     quantity: int
-    unit_cost: Decimal
+    unit_value: Decimal
     prev_stock: int
     new_stock: int
     inventory_id: int
     invoice_line_id: Optional[int]
     sale_line_id: Optional[int]
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     inventory: Optional[InventoryMovementInventoryRef] = None
     invoice_line: Optional[InventoryMovementInvoiceLineRef] = None

@@ -117,7 +117,7 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_
     assert movement.movement_type == InventoryMovementType.OUT
     assert movement.value_type == InventoryValueType.PRICE
     assert movement.quantity == quantity
-    assert movement.unit_cost == unit_price
+    assert movement.unit_value == unit_price
     assert movement.prev_stock == starting_stock
     assert movement.new_stock == starting_stock - quantity
 
@@ -335,7 +335,7 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers
     assert len(movements) == 3
     assert movements[-1].quantity == 3 * inventory.box_size
     assert movements[-1].value_type == InventoryValueType.PRICE
-    assert movements[-1].unit_cost == Decimal("90.00")
+    assert movements[-1].unit_value == Decimal("90.00")
 
 
 def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers):
@@ -419,3 +419,100 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers)
     inv2_after_delete = db_session.get(Inventory, inv2.id)
     assert inv2_after_delete is not None
     assert inv2_after_delete.stock == 60
+
+
+def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
+    client, db_session, auth_headers
+):
+    inventory, client_obj = _seed_inventory_and_client(db_session, stock=20)
+    sale_price = Decimal("5.00")
+
+    created = client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_boxes": 2,
+                    "price": str(sale_price),
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale = created.json()
+    sale_id = sale["id"]
+    sale_line_id = sale["lines"][0]["id"]
+
+    paid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
+    assert paid.status_code == 200, paid.text
+
+    first_metrics = client.get(
+        "/api/products/list-stock",
+        params={"warehouse_id": inventory.warehouse_id},
+    )
+    assert first_metrics.status_code == 200, first_metrics.text
+    first_item = first_metrics.json()[0]["inventory"][0]
+    assert first_item["sales_last_price"] == 5.0
+    assert first_item["sales_avg_price"] == 5.0
+
+    reverted = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "DRAFT"},
+        headers=auth_headers,
+    )
+    assert reverted.status_code == 200, reverted.text
+
+    reverted_metrics = client.get(
+        "/api/products/list-stock",
+        params={"warehouse_id": inventory.warehouse_id},
+    )
+    assert reverted_metrics.status_code == 200, reverted_metrics.text
+    reverted_item = reverted_metrics.json()[0]["inventory"][0]
+    assert reverted_item["sales_last_price"] is None
+    assert reverted_item["sales_avg_price"] is None
+
+    updated = client.put(
+        f"/api/sales/{sale_id}/lines/{sale_line_id}",
+        json={"price": "7.00", "price_type": "BOX"},
+    )
+    assert updated.status_code == 200, updated.text
+
+    repaid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
+    assert repaid.status_code == 200, repaid.text
+
+    latest_metrics = client.get(
+        "/api/products/list-stock",
+        params={"warehouse_id": inventory.warehouse_id},
+    )
+    assert latest_metrics.status_code == 200, latest_metrics.text
+    latest_item = latest_metrics.json()[0]["inventory"][0]
+    assert latest_item["sales_last_price"] == 7.0
+    assert latest_item["sales_avg_price"] == 7.0
+
+    movements = (
+        db_session.exec(
+            select(InventoryMovement)
+            .where(InventoryMovement.sale_line_id == sale_line_id)
+            .order_by(InventoryMovement.id)
+        ).all()
+    )
+    assert len(movements) == 3
+    assert all(movement.is_active for movement in movements)
+    assert [movement.event_type.value for movement in movements] == [
+        "SALE_APPROVED",
+        "SALE_REVERSED",
+        "SALE_APPROVED",
+    ]

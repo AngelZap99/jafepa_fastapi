@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator
 from src.modules.users.users_mixins import PasswordValidationMixin
@@ -7,6 +6,7 @@ from src.shared.models.user.user_roles import (
     DEFAULT_USER_ROLE,
     UserRole,
 )
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 ##### BASE
@@ -64,5 +64,5 @@ class UserResponse(UserBase):
     is_active: bool
     is_verified: bool
     is_admin: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime

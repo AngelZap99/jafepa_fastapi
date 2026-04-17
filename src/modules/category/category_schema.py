@@ -1,8 +1,9 @@
 # src/modules/category/category_schema.py
 
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 ##### BASE
@@ -25,5 +26,5 @@ class CategoryResponse(CategoryBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime

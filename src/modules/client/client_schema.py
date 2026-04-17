@@ -1,6 +1,7 @@
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 ##### BASE
@@ -60,6 +61,6 @@ class ClientResponse(ClientBase):
 
     id: int
     is_active: bool
-    deleted_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
+    deleted_at: Optional[UTCDateTime] = None
+    created_at: UTCDateTime
+    updated_at: UTCDateTime

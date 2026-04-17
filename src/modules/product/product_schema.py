@@ -1,9 +1,10 @@
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import Form
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 ##### BASE
@@ -129,8 +130,8 @@ class BrandResponse(BaseModel):
 class ProductResponse(ProductBase):
     id: int
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     # Relaciones
     category: Optional[CategoryResponse] = None

@@ -177,6 +177,55 @@ def test_inventory_create_with_zero_stock_does_not_register_movement(client, db_
     assert movements == []
 
 
+def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_naive_datetimes(
+    client, db_session
+):
+    data = _seed_inventory_catalog(db_session)
+    product = Product(
+        name="UTC product",
+        code="INV-UTC-001",
+        description="UTC inventory product",
+        category_id=data["category"].id,
+        brand_id=data["brand"].id,
+        image=None,
+    )
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+
+    created = client.post(
+        "/api/inventory/create",
+        json={
+            "product_id": product.id,
+            "warehouse_id": data["warehouse"].id,
+            "stock": 3,
+            "box_size": 1,
+            "is_active": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    payload = created.json()
+    assert payload["created_at"].endswith("+00:00")
+    assert payload["updated_at"].endswith("+00:00")
+
+    movements = client.get("/api/inventory/movements")
+    assert movements.status_code == 200, movements.text
+    movement = movements.json()[0]
+    assert movement["movement_date"].endswith("+00:00")
+    assert movement["created_at"].endswith("+00:00")
+    assert movement["updated_at"].endswith("+00:00")
+    assert "unit_value" in movement
+    assert "unit_cost" not in movement
+
+    naive_from = payload["created_at"].split("+")[0]
+    aware_to = payload["created_at"]
+    filtered = client.get(
+        "/api/inventory/movements",
+        params={"from_date": naive_from, "to_date": aware_to},
+    )
+    assert filtered.status_code == 200, filtered.text
+
+
 def test_inventory_create_returns_404_for_missing_product_or_warehouse(client, db_session):
     data = _seed_inventory_catalog(db_session)
 

@@ -117,105 +117,127 @@ class InventoryMovementRepository:
             q = q.limit(limit)
         return self.db.execute(q).scalars().all()
 
-    def get_recent_in_totals(
-        self, inventory_id: int, months: int = 12
-    ) -> tuple[int, Decimal]:
-        since_dt = utcnow() - timedelta(days=30 * months)
-        qty_sum, cost_sum = (
-            self.db.execute(
-                select(
-                    func.coalesce(func.sum(InventoryMovement.quantity), 0),
-                    func.coalesce(
-                        func.sum(
-                            InventoryMovement.quantity * InventoryMovement.unit_cost
-                        ),
-                        Decimal("0"),
-                    ),
-                ).where(
-                    InventoryMovement.inventory_id == inventory_id,
-                    InventoryMovement.is_active == True,  # noqa: E712
-                    InventoryMovement.movement_type == InventoryMovementType.IN_,
-                    InventoryMovement.source_type == InventorySourceType.INVOICE,
-                    InventoryMovement.event_type == InventoryEventType.INVOICE_RECEIVED,
-                    InventoryMovement.value_type == InventoryValueType.COST,
-                    InventoryMovement.movement_date >= since_dt,
-                )
-            ).one()
-        )
-        return int(qty_sum), cost_sum
+    def _effective_line_movements_subquery(
+        self,
+        *,
+        inventory_id: int,
+        source_type: InventorySourceType,
+        value_type: InventoryValueType,
+        line_field: str,
+        effective_event_type: InventoryEventType,
+        since_dt: datetime | None = None,
+    ):
+        line_column = getattr(InventoryMovement, line_field)
 
-    def get_latest_in_unit_cost(
-        self, inventory_id: int, months: int = 12
-    ) -> Decimal | None:
-        since_dt = utcnow() - timedelta(days=30 * months)
-        return self.db.execute(
-            select(InventoryMovement.unit_cost)
+        latest_ids = (
+            select(func.max(InventoryMovement.id).label("movement_id"))
             .where(
                 InventoryMovement.inventory_id == inventory_id,
                 InventoryMovement.is_active == True,  # noqa: E712
-                InventoryMovement.movement_type == InventoryMovementType.IN_,
-                InventoryMovement.source_type == InventorySourceType.INVOICE,
-                InventoryMovement.event_type == InventoryEventType.INVOICE_RECEIVED,
-                InventoryMovement.value_type == InventoryValueType.COST,
-                InventoryMovement.movement_date >= since_dt,
+                InventoryMovement.source_type == source_type,
+                InventoryMovement.value_type == value_type,
+                line_column.is_not(None),
             )
-            .order_by(InventoryMovement.movement_date.desc())
-        ).scalars().first()
+            .group_by(line_column)
+            .subquery()
+        )
 
-    def get_recent_out_totals(
+        effective = (
+            select(
+                InventoryMovement.id.label("id"),
+                InventoryMovement.quantity.label("quantity"),
+                InventoryMovement.unit_value.label("unit_value"),
+                InventoryMovement.movement_date.label("movement_date"),
+            )
+            .join(latest_ids, InventoryMovement.id == latest_ids.c.movement_id)
+            .where(InventoryMovement.event_type == effective_event_type)
+        )
+        if since_dt is not None:
+            effective = effective.where(InventoryMovement.movement_date >= since_dt)
+        return effective.subquery()
+
+    def get_recent_in_effective_totals(
         self, inventory_id: int, months: int = 12
     ) -> tuple[int, Decimal]:
         since_dt = utcnow() - timedelta(days=30 * months)
-        qty_sum, cost_sum = (
+        effective = self._effective_line_movements_subquery(
+            inventory_id=inventory_id,
+            source_type=InventorySourceType.INVOICE,
+            value_type=InventoryValueType.COST,
+            line_field="invoice_line_id",
+            effective_event_type=InventoryEventType.INVOICE_RECEIVED,
+            since_dt=since_dt,
+        )
+        qty_sum, value_sum = (
             self.db.execute(
                 select(
-                    func.coalesce(func.sum(InventoryMovement.quantity), 0),
+                    func.coalesce(func.sum(effective.c.quantity), 0),
                     func.coalesce(
-                        func.sum(
-                            InventoryMovement.quantity * InventoryMovement.unit_cost
-                        ),
+                        func.sum(effective.c.quantity * effective.c.unit_value),
                         Decimal("0"),
                     ),
-                ).where(
-                    InventoryMovement.inventory_id == inventory_id,
-                    InventoryMovement.is_active == True,  # noqa: E712
-                    InventoryMovement.movement_type == InventoryMovementType.OUT,
-                    InventoryMovement.source_type == InventorySourceType.SALE,
-                    InventoryMovement.event_type == InventoryEventType.SALE_APPROVED,
-                    InventoryMovement.value_type == InventoryValueType.PRICE,
-                    InventoryMovement.movement_date >= since_dt,
                 )
             ).one()
         )
-        return int(qty_sum), cost_sum
+        return int(qty_sum), value_sum
 
-    def get_latest_out_unit_cost(
+    def get_latest_in_effective_value(
         self, inventory_id: int, months: int = 12
     ) -> Decimal | None:
         since_dt = utcnow() - timedelta(days=30 * months)
+        effective = self._effective_line_movements_subquery(
+            inventory_id=inventory_id,
+            source_type=InventorySourceType.INVOICE,
+            value_type=InventoryValueType.COST,
+            line_field="invoice_line_id",
+            effective_event_type=InventoryEventType.INVOICE_RECEIVED,
+            since_dt=since_dt,
+        )
         return self.db.execute(
-            select(InventoryMovement.unit_cost)
-            .where(
-                InventoryMovement.inventory_id == inventory_id,
-                InventoryMovement.is_active == True,  # noqa: E712
-                InventoryMovement.movement_type == InventoryMovementType.OUT,
-                InventoryMovement.source_type == InventorySourceType.SALE,
-                InventoryMovement.event_type == InventoryEventType.SALE_APPROVED,
-                InventoryMovement.value_type == InventoryValueType.PRICE,
-                InventoryMovement.movement_date >= since_dt,
+            select(effective.c.unit_value).order_by(
+                effective.c.movement_date.desc(), effective.c.id.desc()
             )
-            .order_by(InventoryMovement.movement_date.desc())
         ).scalars().first()
 
-    def deactivate_invoice_line_in_movements(self, invoice_line_id: int) -> None:
-        movements = (
-            self.db.execute(
-                select(InventoryMovement).where(
-                    InventoryMovement.invoice_line_id == invoice_line_id,
-                    InventoryMovement.movement_type == InventoryMovementType.IN_,
-                    InventoryMovement.is_active == True,  # noqa: E712
-                )
-            ).scalars().all()
+    def get_recent_out_effective_totals(
+        self, inventory_id: int, months: int = 12
+    ) -> tuple[int, Decimal]:
+        since_dt = utcnow() - timedelta(days=30 * months)
+        effective = self._effective_line_movements_subquery(
+            inventory_id=inventory_id,
+            source_type=InventorySourceType.SALE,
+            value_type=InventoryValueType.PRICE,
+            line_field="sale_line_id",
+            effective_event_type=InventoryEventType.SALE_APPROVED,
+            since_dt=since_dt,
         )
-        for movement in movements:
-            movement.is_active = False
+        qty_sum, value_sum = (
+            self.db.execute(
+                select(
+                    func.coalesce(func.sum(effective.c.quantity), 0),
+                    func.coalesce(
+                        func.sum(effective.c.quantity * effective.c.unit_value),
+                        Decimal("0"),
+                    ),
+                )
+            ).one()
+        )
+        return int(qty_sum), value_sum
+
+    def get_latest_out_effective_value(
+        self, inventory_id: int, months: int = 12
+    ) -> Decimal | None:
+        since_dt = utcnow() - timedelta(days=30 * months)
+        effective = self._effective_line_movements_subquery(
+            inventory_id=inventory_id,
+            source_type=InventorySourceType.SALE,
+            value_type=InventoryValueType.PRICE,
+            line_field="sale_line_id",
+            effective_event_type=InventoryEventType.SALE_APPROVED,
+            since_dt=since_dt,
+        )
+        return self.db.execute(
+            select(effective.c.unit_value).order_by(
+                effective.c.movement_date.desc(), effective.c.id.desc()
+            )
+        ).scalars().first()

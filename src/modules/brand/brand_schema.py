@@ -1,8 +1,9 @@
 # src/modules/brand/brand_schema.py
 
-from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+from src.shared.schemas.datetime_types import UTCDateTime
 
 ##### BASE
 class BrandBase(BaseModel):
@@ -21,7 +22,7 @@ class BrandUpdate(BaseModel):
 class BrandResponse(BrandBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: Optional[datetime] = None  # Fecha de eliminación lógica
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
+    deleted_at: Optional[UTCDateTime] = None  # Fecha de eliminación lógica
     is_active: bool = True                     # Estado activo/inactivo

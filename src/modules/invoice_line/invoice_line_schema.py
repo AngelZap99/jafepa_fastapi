@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -10,6 +9,7 @@ from src.shared.enums.invoice_enums import InvoiceLinePriceType
 from src.shared.schemas.common_responses import (
     ProductLineResponse,
 )
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 class InvoiceLineBase(BaseModel):
@@ -64,8 +64,8 @@ class InvoiceLineResponse(BaseModel):
     price_type: InvoiceLinePriceType
     inventory_applied: bool
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     product: Optional[ProductLineResponse] = None
 

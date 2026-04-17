@@ -18,6 +18,8 @@ Regla de mantenimiento:
 - Los mensajes orientados a usuario y validación deben ir en español.
 - Los errores internos del servidor deben responder con mensajes genéricos, sin exponer detalles técnicos.
 - Todo error manejado por el backend debe registrarse en logs con al menos: método HTTP, ruta, status, `message` y `errors`.
+- `src/shared/exception_handlers.py` es la única vía permitida para respuestas JSON de error.
+- No se deben agregar `JSONResponse(...)` manuales para errores en módulos nuevos.
 - Para errores simples:
   - `message` describe el problema
   - `errors` va vacío
@@ -172,14 +174,14 @@ Implicación:
 - `movement_type`: `IN` o `OUT`
 - `value_type`: `COST` o `PRICE`
 - `quantity`
-- `unit_cost`
+- `unit_value`
 - `prev_stock`
 - `new_stock`
 - `invoice_line_id`
 - `sale_line_id`
 
 #### Semántica actual
-- `unit_cost` se mantiene como nombre de campo por compatibilidad.
+- `unit_value` representa el valor monetario unitario del movimiento.
 - `value_type` es quien define qué significa ese valor:
   - `COST`: costo de compra / costo de ajuste
   - `PRICE`: precio de venta
@@ -187,8 +189,8 @@ Implicación:
 - En ventas, `value_type = PRICE`.
 
 Implicación:
-- El nombre `unit_cost` sigue siendo imperfecto, pero ya no queda ambiguo si se respeta `value_type`.
-- Algunos reportes de ventas siguen leyendo el mismo campo, pero para ventas deben interpretarlo junto con `value_type = PRICE`.
+- El valor monetario del movimiento debe interpretarse siempre junto con `value_type`.
+- Los reportes de ventas y compras ya no dependen de un nombre que sugiera costo cuando el valor real puede ser precio.
 
 ### 4. Invoices
 
@@ -230,7 +232,6 @@ Implicación:
 #### Reversa al volver de ARRIVED
 - Por cada `invoice_line` aplicada:
   - resta stock
-  - desactiva movimientos previos de entrada de esa línea
   - recalcula costo reciente
   - genera nuevo movimiento `INVOICE_UNRECEIVED`
   - marca `inventory_applied = False`
@@ -338,31 +339,49 @@ Implicación:
 
 #### Diferencia actual entre reversas
 - Reversa de factura:
-  - desactiva movimientos previos de entrada
   - agrega nuevo movimiento de salida
 - Reversa de venta:
-  - no desactiva la salida previa
   - agrega nuevo movimiento de entrada
 
 Implicación:
-- Hoy no existe una política uniforme de histórico.
+- Todo histórico de inventario sigue una sola política:
+  - nunca se desactivan movimientos por reversa
+  - toda reversa agrega un contramovimiento
+  - el estado efectivo se determina por la última transición de cada línea
 
 #### Métricas de producto
 - El módulo de producto usa movimientos de salida para calcular:
   - último precio de venta
   - precio promedio reciente de venta
-- Esas métricas salen del campo `unit_cost` del movimiento filtrado con `value_type = PRICE`.
+- Esas métricas salen del campo `unit_value` del movimiento filtrado con `value_type = PRICE`.
+
+### 7. Fechas y UTC
+
+#### Regla actual
+- Todos los `datetime` técnicos del backend se manejan en UTC aware.
+- Las respuestas públicas serializan esos `datetime` con offset explícito `+00:00`.
+- Si un filtro o input recibe un `datetime` naive, el backend lo interpreta como UTC.
+
+#### Alcance
+- Esto aplica a:
+  - `created_at`
+  - `updated_at`
+  - `deleted_at`
+  - `movement_date`
+- No cambia fechas de negocio tipo `date`, como:
+  - `sale_date`
+  - `invoice_date`
+  - `order_date`
+  - `arrival_date`
 
 ## Riesgos y ambigüedades actuales
 
 ### Riesgos importantes
 - Facturas no tienen el mismo nivel de protección transaccional y locking que ventas.
 - `quantity_units` en ventas no significa realmente unidades físicas en la lógica actual.
-- El histórico de movimientos mezcla dos criterios distintos de reversa.
 
 ### Riesgos de reporte
-- El nombre `unit_cost` sigue pudiendo inducir error si alguien ignora `value_type`.
-- Cualquier reporte nuevo debe interpretar el valor monetario del movimiento usando ambos campos.
+- Cualquier reporte nuevo debe interpretar el valor monetario del movimiento usando `unit_value` + `value_type`.
 
 ### Riesgos de consistencia
 - Algunas reglas viven en schema o servicio, pero no en constraint de base de datos.

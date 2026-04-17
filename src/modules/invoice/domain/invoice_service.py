@@ -89,17 +89,17 @@ class InvoiceService:
         movement_repository: InventoryMovementRepository,
         inventory_id: int,
         incoming_qty: int,
-        incoming_unit_cost: Decimal,
+        incoming_unit_value: Decimal,
     ) -> Decimal:
         # This is a purchase-reference heuristic, not a pricing engine or accounting-grade cost.
         # The business only needs a recent reference of how the product has been bought.
-        recent_qty, recent_cost = movement_repository.get_recent_in_totals(
+        recent_qty, recent_cost = movement_repository.get_recent_in_effective_totals(
             inventory_id=inventory_id, months=6
         )
         total_qty = recent_qty + incoming_qty
         if total_qty <= 0:
-            return incoming_unit_cost
-        return (recent_cost + (Decimal(incoming_qty) * incoming_unit_cost)) / Decimal(
+            return incoming_unit_value
+        return (recent_cost + (Decimal(incoming_qty) * incoming_unit_value)) / Decimal(
             total_qty
         )
 
@@ -125,15 +125,15 @@ class InvoiceService:
                 box_size=line.box_size,
             )
 
-            # Pricing agreement: invoices send `price` as the unit cost per box/presentation,
-            # so the inventory unit_cost matches the line price (no multiplication by box_size).
-            unit_cost = line.price
+            # Pricing agreement: invoices send `price` as the cost per box/presentation,
+            # so the inventory movement value matches the line price (no multiplication by box_size).
+            unit_value = line.price
             if inventory is None:
                 inventory = Inventory(
                     stock=0,
                     box_size=line.box_size,
-                    avg_cost=unit_cost,
-                    last_cost=unit_cost,
+                    avg_cost=unit_value,
+                    last_cost=unit_value,
                     warehouse_id=invoice.warehouse_id,
                     product_id=line.product_id,
                     is_active=True,
@@ -147,13 +147,13 @@ class InvoiceService:
             prev_stock = inventory.stock
             new_stock = prev_stock + quantity
             inventory.stock = new_stock
-            inventory.last_cost = unit_cost
+            inventory.last_cost = unit_value
             inventory.avg_cost = (
                 self._compute_recent_avg_cost(
                     movement_repository=movement_repository,
                     inventory_id=inventory.id,
                     incoming_qty=quantity,
-                    incoming_unit_cost=unit_cost,
+                    incoming_unit_value=unit_value,
                 )
             )
 
@@ -165,7 +165,7 @@ class InvoiceService:
                 movement_type=InventoryMovementType.IN_,
                 value_type=InventoryValueType.COST,
                 quantity=quantity,
-                unit_cost=unit_cost,
+                unit_value=unit_value,
                 prev_stock=prev_stock,
                 new_stock=new_stock,
                 inventory_id=inventory.id,
@@ -215,18 +215,6 @@ class InvoiceService:
                 )
 
             inventory.stock = new_stock
-            movement_repository.deactivate_invoice_line_in_movements(line.id)
-            recent_qty, recent_cost = movement_repository.get_recent_in_totals(
-                inventory_id=inventory.id, months=6
-            )
-            latest_cost = movement_repository.get_latest_in_unit_cost(inventory.id)
-            if recent_qty > 0:
-                inventory.avg_cost = recent_cost / Decimal(recent_qty)
-            elif latest_cost is not None:
-                inventory.avg_cost = latest_cost
-
-            if latest_cost is not None:
-                inventory.last_cost = latest_cost
 
             movement = InventoryMovement(
                 movement_group_id=movement_group_id,
@@ -236,17 +224,31 @@ class InvoiceService:
                 movement_type=InventoryMovementType.OUT,
                 value_type=InventoryValueType.COST,
                 quantity=quantity,
-                unit_cost=line.price,
+                unit_value=line.price,
                 prev_stock=prev_stock,
                 new_stock=new_stock,
                 inventory_id=inventory.id,
                 invoice_line_id=line.id,
             )
 
-            inventory_repository.update(inventory, commit=False)
-            movement_repository.add(movement, commit=False)
             line.inventory_applied = False
+            session.add(movement)
             session.add(line)
+            session.flush()
+
+            recent_qty, recent_cost = movement_repository.get_recent_in_effective_totals(
+                inventory_id=inventory.id, months=6
+            )
+            latest_cost = movement_repository.get_latest_in_effective_value(inventory.id)
+            if recent_qty > 0:
+                inventory.avg_cost = recent_cost / Decimal(recent_qty)
+            elif latest_cost is not None:
+                inventory.avg_cost = latest_cost
+
+            if latest_cost is not None:
+                inventory.last_cost = latest_cost
+
+            inventory_repository.update(inventory, commit=False)
 
             movement_sequence += 1
 

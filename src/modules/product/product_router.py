@@ -131,13 +131,13 @@ def list_products_with_stock(
                 continue
 
             available_boxes = inv.stock
-            recent_qty, recent_cost = movement_repo.get_recent_out_totals(
+            recent_qty, recent_value = movement_repo.get_recent_out_effective_totals(
                 inv.id, months=metrics_window_months
             )
             sales_avg_price = (
-                float(recent_cost / recent_qty) if recent_qty > 0 else None
+                float(recent_value / recent_qty) if recent_qty > 0 else None
             )
-            sales_last_price = movement_repo.get_latest_out_unit_cost(
+            sales_last_price = movement_repo.get_latest_out_effective_value(
                 inv.id, months=metrics_window_months
             )
             item_data = InventoryStockItem.model_validate(inv, from_attributes=True).model_dump()

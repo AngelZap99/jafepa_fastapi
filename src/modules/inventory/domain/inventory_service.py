@@ -196,7 +196,7 @@ class InventoryService:
             movement_type=movement_type,
             value_type=InventoryValueType.COST,
             quantity=quantity,
-            unit_cost=inventory.last_cost,
+            unit_value=inventory.last_cost,
             prev_stock=prev_stock,
             new_stock=new_stock,
             inventory_id=inventory.id,

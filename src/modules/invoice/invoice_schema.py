@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Optional
 
@@ -14,6 +14,7 @@ from src.modules.invoice_line.invoice_line_schema import (
 from src.shared.schemas.common_responses import (
     WarehouseLineResponse,
 )
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 class InvoiceBase(BaseModel):
@@ -144,8 +145,8 @@ class InvoiceResponse(BaseModel):
     warehouse_id: int
 
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDateTime
+    updated_at: UTCDateTime
 
     warehouse: Optional[WarehouseLineResponse] = None
     lines: List[InvoiceLineResponse] = Field(default_factory=list)
