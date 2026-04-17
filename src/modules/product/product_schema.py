@@ -148,12 +148,14 @@ class InventoryStockItem(BaseModel):
     product_id: int
     box_size: int
     stock: int
+    reserved_stock: int = 0
     available_boxes: int = 0
     avg_cost: Decimal
     last_cost: Decimal
     sales_last_price: Optional[float] = None
     sales_avg_price: Optional[float] = None
     is_active: bool
+    is_over_reserved: bool = False
 
 
 class ProductStockResponse(ProductResponse):

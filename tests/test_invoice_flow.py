@@ -608,3 +608,53 @@ def test_invoice_line_db_constraint_blocks_duplicate_active_keys(
     with pytest.raises(IntegrityError):
         db_session.commit()
     db_session.rollback()
+
+
+def test_invoice_can_create_inline_product_and_receive_inventory(
+    client, db_session, catalog_seed
+):
+    response = client.post(
+        "/api/invoices/create",
+        json={
+            "invoice_number": "INV-0011",
+            "sequence": 11,
+            "status": "ARRIVED",
+            "warehouse_id": catalog_seed["warehouse_id"],
+            "lines": [
+                {
+                    "new_product": {
+                        "name": "Producto inline factura",
+                        "code": "FAC-INLINE-001",
+                        "description": "Creado desde factura",
+                        "category_id": catalog_seed["category_id"],
+                        "brand_id": catalog_seed["brand_id"],
+                    },
+                    "box_size": 10,
+                    "quantity_boxes": 2,
+                    "price": "35.00",
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    invoice = response.json()
+    line = invoice["lines"][0]
+    assert line["product_id"] > 0
+
+    product = db_session.exec(
+        select(Product).where(Product.code == "FAC-INLINE-001")
+    ).first()
+    assert product is not None
+    assert product.id == line["product_id"]
+
+    inventory = db_session.exec(
+        select(Inventory).where(
+            Inventory.warehouse_id == catalog_seed["warehouse_id"],
+            Inventory.product_id == product.id,
+            Inventory.box_size == 10,
+        )
+    ).first()
+    assert inventory is not None
+    assert inventory.stock == 2

@@ -17,3 +17,8 @@ class SaleStatus(str, Enum):
 class SaleLinePriceType(str, Enum):
     UNIT = "UNIT"
     BOX = "BOX"
+
+
+class SaleLineQuantityMode(str, Enum):
+    BOX = "BOX"
+    UNIT = "UNIT"

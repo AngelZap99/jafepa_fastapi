@@ -11,6 +11,9 @@ from src.modules.users.domain.users_repository import UserRepository
 
 # Routers are mounted under `/api` in `main.py`
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_optional_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login", auto_error=False
+)
 
 
 def get_current_user(
@@ -55,3 +58,12 @@ def get_current_user(
         )
 
     return user
+
+
+def get_optional_current_user(
+    token: Annotated[str | None, Depends(oauth2_optional_scheme)],
+    session: SessionDep,
+) -> User | None:
+    if not token:
+        return None
+    return get_current_user(token, session)

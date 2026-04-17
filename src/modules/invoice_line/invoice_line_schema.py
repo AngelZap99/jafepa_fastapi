@@ -12,8 +12,24 @@ from src.shared.schemas.common_responses import (
 from src.shared.schemas.datetime_types import UTCDateTime
 
 
+class InlineInvoiceProductCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=2, max_length=250)
+    code: str = Field(min_length=1, max_length=100)
+    description: Optional[str] = Field(default=None, max_length=500)
+    category_id: int = Field(gt=0)
+    brand_id: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def normalize_code(self):
+        self.code = self.code.strip().upper()
+        return self
+
+
 class InvoiceLineBase(BaseModel):
-    product_id: int = Field(gt=0)
+    product_id: Optional[int] = Field(default=None, gt=0)
+    new_product: Optional[InlineInvoiceProductCreate] = None
     box_size: int = Field(gt=0)
     quantity_boxes: int = Field(gt=0)
     total_units: Optional[int] = Field(default=None, gt=0)
@@ -26,6 +42,8 @@ class InvoiceLineCreate(InvoiceLineBase):
 
     @model_validator(mode="after")
     def validate_total_units(self):
+        if (self.product_id is None) == (self.new_product is None):
+            raise ValueError("Debe enviarse product_id o new_product")
         if self.total_units is None:
             return self
 

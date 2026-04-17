@@ -30,6 +30,7 @@ from src.modules.invoice.invoice_schema import (
 )
 from src.modules.invoice_line.invoice_line_schema import (
     InvoiceLineCreate,
+    InlineInvoiceProductCreate,
     InvoiceLineUpdate,
 )
 from src.modules.invoice.domain.invoice_repository import InvoiceRepository
@@ -37,6 +38,10 @@ from src.modules.inventory.domain.inventory_repository import InventoryRepositor
 from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
+from src.modules.product.domain.product_repository import ProductRepository
+from src.shared.models.brand.brand_model import Brand
+from src.shared.models.category.category_model import Category
+from src.shared.models.product.product_model import Product
 
 
 def _sqlstate(err: IntegrityError) -> str | None:
@@ -92,12 +97,87 @@ class InvoiceService:
                 self._raise_duplicate_line_conflict()
 
     def _ensure_payload_lines_unique(self, payload: InvoiceCreateWithLines) -> None:
-        seen: set[tuple[int, int]] = set()
+        seen: set[tuple[tuple[str, int | str | None], int]] = set()
         for line in payload.lines:
-            key = (line.product_id, line.box_size)
+            line_key = (
+                ("product_id", line.product_id)
+                if line.product_id is not None
+                else ("new_product_code", line.new_product.code if line.new_product else None)
+            )
+            key = (line_key, line.box_size)
             if key in seen:
                 self._raise_duplicate_line_conflict()
             seen.add(key)
+
+    def _ensure_product_refs_exist(
+        self, *, category_id: int, brand_id: int
+    ) -> None:
+        session = self.repository.db
+        category_exists = session.exec(
+            select(Category.id).where(
+                Category.id == category_id, Category.is_active == True  # noqa: E712
+            )
+        ).first()
+        if category_exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="La línea de factura referencia una categoría inválida.",
+            )
+
+        brand_exists = session.exec(
+            select(Brand.id).where(
+                Brand.id == brand_id, Brand.is_active == True  # noqa: E712
+            )
+        ).first()
+        if brand_exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="La línea de factura referencia una marca inválida.",
+            )
+
+    def _create_inline_product(
+        self, payload: InlineInvoiceProductCreate
+    ) -> Product:
+        session = self.repository.db
+        repository = ProductRepository(session)
+        self._ensure_product_refs_exist(
+            category_id=payload.category_id,
+            brand_id=payload.brand_id,
+        )
+
+        conflicts = repository.check_conflicts(payload)
+        if conflicts:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": "Los datos del producto en la factura entran en conflicto con un registro existente.",
+                    "errors": conflicts,
+                },
+            )
+
+        product = Product(
+            name=payload.name,
+            code=payload.code,
+            description=payload.description,
+            category_id=payload.category_id,
+            brand_id=payload.brand_id,
+            image=None,
+            is_active=True,
+        )
+        repository.add(product, commit=False)
+        session.flush()
+        return product
+
+    def _resolve_invoice_line_product_id(self, payload: InvoiceLineCreate) -> int:
+        if payload.product_id is not None:
+            return payload.product_id
+        if payload.new_product is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="La línea de factura debe enviar product_id o new_product.",
+            )
+        product = self._create_inline_product(payload.new_product)
+        return product.id
 
     def _locked_inventory_map(
         self, invoice: Invoice, *, applied_state: bool
@@ -362,8 +442,8 @@ class InvoiceService:
             warehouse_id=payload.warehouse_id,
         )
 
-        # Create lines only if provided
         for l in payload.lines:
+            product_id = self._resolve_invoice_line_product_id(l)
             total_units = l.box_size * l.quantity_boxes
             normalized_price = self._normalize_line_price(
                 price=l.price,
@@ -372,7 +452,7 @@ class InvoiceService:
             )
             invoice.lines.append(
                 InvoiceLine(
-                    product_id=l.product_id,
+                    product_id=product_id,
                     box_size=l.box_size,
                     quantity_boxes=l.quantity_boxes,
                     total_units=total_units,
@@ -534,11 +614,8 @@ class InvoiceService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
             )
-        self._ensure_invoice_line_unique(
-            invoice,
-            product_id=payload.product_id,
-            box_size=payload.box_size,
-        )
+        product_id = self._resolve_invoice_line_product_id(payload)
+        self._ensure_invoice_line_unique(invoice, product_id=product_id, box_size=payload.box_size)
 
         total_units = payload.box_size * payload.quantity_boxes
         normalized_price = self._normalize_line_price(
@@ -547,7 +624,7 @@ class InvoiceService:
             box_size=payload.box_size,
         )
         line = InvoiceLine(
-            product_id=payload.product_id,
+            product_id=product_id,
             box_size=payload.box_size,
             quantity_boxes=payload.quantity_boxes,
             total_units=total_units,

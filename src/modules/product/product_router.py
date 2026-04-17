@@ -130,7 +130,7 @@ def list_products_with_stock(
             if not include_inactive and not inv.is_active:
                 continue
 
-            available_boxes = inv.stock
+            available_boxes = inv.stock - inv.reserved_stock
             recent_qty, recent_value = movement_repo.get_recent_out_effective_totals(
                 inv.id, months=metrics_window_months
             )
@@ -143,7 +143,9 @@ def list_products_with_stock(
             item_data = InventoryStockItem.model_validate(inv, from_attributes=True).model_dump()
             item_data.update(
                 {
+                    "reserved_stock": inv.reserved_stock,
                     "available_boxes": available_boxes,
+                    "is_over_reserved": inv.reserved_stock > inv.stock,
                     "sales_last_price": float(sales_last_price)
                     if sales_last_price is not None
                     else None,

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status, Query
 
-from src.modules.auth.auth_dependencies import get_current_user
+from src.modules.auth.auth_dependencies import get_current_user, get_optional_current_user
 from src.shared.database.dependencies import SessionDep
 
 from src.modules.sale.sale_schema import (
@@ -84,9 +84,10 @@ def invoice_sale(
 )
 def create_sale(
     payload: SaleCreateWithLines,
+    current_user = Depends(get_optional_current_user),
     sale_service: SaleService = Depends(get_sale_service),
 ):
-    return sale_service.create_sale(payload)
+    return sale_service.create_sale(payload, current_user)
 
 
 @router.put(
@@ -97,9 +98,10 @@ def create_sale(
 def update_sale(
     sale_id: int,
     payload: SaleUpdate,
+    current_user = Depends(get_optional_current_user),
     sale_service: SaleService = Depends(get_sale_service),
 ):
-    return sale_service.update_sale(sale_id, payload)
+    return sale_service.update_sale(sale_id, payload, current_user)
 
 
 @router.put(
@@ -136,9 +138,10 @@ def delete_sale(
 def add_sale_line(
     sale_id: int,
     payload: SaleLineCreate,
+    current_user = Depends(get_optional_current_user),
     sale_service: SaleService = Depends(get_sale_service),
 ):
-    return sale_service.add_sale_line(sale_id, payload)
+    return sale_service.add_sale_line(sale_id, payload, current_user)
 
 
 @router.put(
@@ -150,9 +153,10 @@ def update_sale_line(
     sale_id: int,
     line_id: int,
     payload: SaleLineUpdate,
+    current_user = Depends(get_optional_current_user),
     sale_service: SaleService = Depends(get_sale_service),
 ):
-    return sale_service.update_sale_line(sale_id, line_id, payload)
+    return sale_service.update_sale_line(sale_id, line_id, payload, current_user)
 
 
 @router.delete(
@@ -163,6 +167,7 @@ def update_sale_line(
 def delete_sale_line(
     sale_id: int,
     line_id: int,
+    current_user = Depends(get_optional_current_user),
     sale_service: SaleService = Depends(get_sale_service),
 ):
-    return sale_service.delete_sale_line(sale_id, line_id)
+    return sale_service.delete_sale_line(sale_id, line_id, current_user)

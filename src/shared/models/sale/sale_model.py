@@ -1,8 +1,9 @@
 from datetime import date
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from sqlalchemy import Date, Numeric
+from sqlalchemy import Date, DateTime, Numeric
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
@@ -22,6 +23,20 @@ class Sale(MyBaseModel, table=True):
     notes: Optional[str] = Field(default=None, max_length=500)
 
     client_id: int = Field(foreign_key="client.id", nullable=False, index=True)
+    paid_by: Optional[int] = Field(default=None, nullable=True, foreign_key="users.id")
+    cancelled_by: Optional[int] = Field(
+        default=None, nullable=True, foreign_key="users.id"
+    )
+    paid_at: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        sa_type=DateTime(timezone=True),
+    )
+    cancelled_at: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        sa_type=DateTime(timezone=True),
+    )
 
     client: Mapped[Optional["Client"]] = Relationship(
         sa_relationship_kwargs={"lazy": "joined"}

@@ -1,11 +1,17 @@
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 from fastapi import Form
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 from src.modules.product.product_schema import ProductResponse
 from src.modules.warehouse.warehouse_schema import (
     WarehouseResponse,
+)
+from src.shared.enums.sale_enums import (
+    SaleLinePriceType,
+    SaleLineQuantityMode,
+    SaleStatus,
 )
 from src.shared.enums.inventory_enums import (
     InventoryEventType,
@@ -13,6 +19,7 @@ from src.shared.enums.inventory_enums import (
     InventorySourceType,
     InventoryValueType,
 )
+from src.shared.schemas.common_responses import ClientLineResponse
 from src.shared.schemas.datetime_types import UTCDateTime
 
 
@@ -21,6 +28,7 @@ from src.shared.schemas.datetime_types import UTCDateTime
 #######################################
 class InventoryBase(BaseModel):
     stock: int = Field(ge=0)
+    reserved_stock: int = Field(default=0, ge=0)
     box_size: int = Field(ge=1)
 
     warehouse_id: int = Field(gt=0)
@@ -44,6 +52,7 @@ class InventoryCosts(BaseModel):
 #######################################
 class InventoryCreate(InventoryBase):
     model_config = ConfigDict(extra="forbid")
+    reserved_stock: int = Field(default=0, exclude=True)
     is_active: bool = True
 
 
@@ -124,8 +133,21 @@ class InventoryResponse(InventoryBase, InventoryCosts):
     # Relaciones opcionales
     warehouse: Optional[WarehouseResponse] = None
     product: Optional[ProductResponse] = None
+    active_reservations: list["InventoryReservationResponse"] = Field(
+        default_factory=list
+    )
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def available_stock(self) -> int:
+        return self.stock - self.reserved_stock
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def is_over_reserved(self) -> bool:
+        return self.reserved_stock > self.stock
 
 
 #######################################
@@ -210,3 +232,34 @@ class InventoryMovementResponse(BaseModel):
     inventory: Optional[InventoryMovementInventoryRef] = None
     invoice_line: Optional[InventoryMovementInvoiceLineRef] = None
     sale_line: Optional[InventoryMovementSaleLineRef] = None
+
+
+class InventoryReservationSaleRef(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sale_date: date
+    status: SaleStatus
+    notes: Optional[str] = None
+    client: Optional[ClientLineResponse] = None
+    created_by: Optional[int] = None
+    updated_at: UTCDateTime
+
+
+class InventoryReservationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sale_line_id: int
+    sale_id: int
+    quantity_boxes: int
+    quantity_mode: SaleLineQuantityMode
+    price: Decimal
+    price_type: SaleLinePriceType
+    total_price: Decimal
+    product_code: Optional[str] = None
+    product_name: Optional[str] = None
+    source_box_size: Optional[int] = None
+    projected_units_from_stock: Optional[int] = None
+    projected_boxes_to_open: Optional[int] = None
+    projected_units_leftover: Optional[int] = None
+    sale: Optional[InventoryReservationSaleRef] = None

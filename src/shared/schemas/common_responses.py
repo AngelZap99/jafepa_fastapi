@@ -30,6 +30,15 @@ class ClientLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UserAuditLineResponse(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    email: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ErrorDetailResponse(BaseModel):
     field: str | None = None
     message: str

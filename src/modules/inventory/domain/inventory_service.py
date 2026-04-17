@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from math import ceil
 from typing import List, Optional
 from uuid import uuid4
 
@@ -26,6 +27,7 @@ from src.shared.enums.inventory_enums import (
     InventoryValueType,
 )
 from src.shared.files.image_validator import ImageValidator
+from src.shared.enums.sale_enums import SaleLineQuantityMode
 from src.shared.files.upload_file_s3 import S3FileHandler
 from src.shared.models.brand.brand_model import Brand
 from src.shared.models.category.category_model import Category
@@ -34,6 +36,8 @@ from src.shared.models.inventory_movement.inventory_movement_model import (
     InventoryMovement,
 )
 from src.shared.models.product.product_model import Product
+from src.shared.models.sale.sale_model import Sale
+from src.shared.models.sale_line.sale_line_model import SaleLine
 from src.shared.models.warehouse.warehouse_model import Warehouse
 
 from .pdf_generator import PDFGenerator
@@ -266,6 +270,7 @@ class InventoryService:
 
         unitary_inventory = Inventory(
             stock=0,
+            reserved_stock=0,
             box_size=1,
             avg_cost=Decimal("0.00"),
             last_cost=Decimal("0.00"),
@@ -289,6 +294,111 @@ class InventoryService:
             )
         return inventory
 
+    def _attach_active_reservations(self, inventory: Inventory) -> Inventory:
+        reservations = list(
+            self.repository.db.exec(
+                select(SaleLine)
+                .join(SaleLine.sale)
+                .join(SaleLine.inventory)
+                .where(
+                    SaleLine.is_active == True,  # noqa: E712
+                    SaleLine.reservation_applied == True,  # noqa: E712
+                    Sale.is_active == True,  # noqa: E712
+                    Sale.status == "DRAFT",
+                    Inventory.product_id == inventory.product_id,
+                    Inventory.warehouse_id == inventory.warehouse_id,
+                )
+                .order_by(Sale.updated_at.desc(), Sale.id.desc(), SaleLine.id.desc())
+            ).all()
+        )
+
+        payload = []
+        for line in reservations:
+            sale = line.sale
+            source_inventory = line.inventory
+            if not sale or not source_inventory:
+                continue
+            affects_source = line.inventory_id == inventory.id
+            affects_unit_inventory = (
+                inventory.box_size == 1
+                and line.quantity_mode == SaleLineQuantityMode.UNIT
+                and source_inventory.product_id == inventory.product_id
+                and source_inventory.warehouse_id == inventory.warehouse_id
+            )
+            if not affects_source and not affects_unit_inventory:
+                continue
+
+            source_box_size = None
+            projected_units_from_stock = None
+            projected_boxes_to_open = None
+            projected_units_leftover = None
+            if line.quantity_mode == SaleLineQuantityMode.UNIT:
+                current_line_reserved_units = int(line.quantity_units) if line.reservation_applied else 0
+                if int(source_inventory.box_size or 1) > 1:
+                    unit_inventory = self.repository.db.exec(
+                        select(Inventory).where(
+                            Inventory.warehouse_id == source_inventory.warehouse_id,
+                            Inventory.product_id == source_inventory.product_id,
+                            Inventory.box_size == 1,
+                        )
+                    ).first()
+                    unit_stock = int(unit_inventory.stock) if unit_inventory else 0
+                    unit_reserved = int(unit_inventory.reserved_stock) if unit_inventory else 0
+                    available_units = max(
+                        unit_stock - max(unit_reserved - current_line_reserved_units, 0),
+                        0,
+                    )
+                    projected_units_from_stock = min(int(line.quantity_units), available_units)
+                    remaining_units = max(
+                        int(line.quantity_units) - projected_units_from_stock,
+                        0,
+                    )
+                    source_box_size = int(source_inventory.box_size or 1)
+                    projected_boxes_to_open = (
+                        ceil(remaining_units / source_box_size)
+                        if remaining_units > 0
+                        else 0
+                    )
+                    projected_units_leftover = (
+                        projected_boxes_to_open * source_box_size - remaining_units
+                        if projected_boxes_to_open > 0
+                        else 0
+                    )
+                else:
+                    available_units = max(
+                        int(source_inventory.stock)
+                        - max(
+                            int(source_inventory.reserved_stock) - current_line_reserved_units,
+                            0,
+                        ),
+                        0,
+                    )
+                    projected_units_from_stock = min(int(line.quantity_units), available_units)
+                    source_box_size = int(source_inventory.box_size or 1)
+                    projected_boxes_to_open = 0
+                    projected_units_leftover = 0
+            payload.append(
+                {
+                    "sale_line_id": line.id,
+                    "sale_id": sale.id,
+                    "quantity_boxes": line.quantity_boxes,
+                    "quantity_mode": line.quantity_mode,
+                    "price": line.price,
+                    "price_type": line.price_type,
+                    "total_price": line.total_price,
+                    "product_code": line.product_code,
+                    "product_name": line.product_name,
+                    "source_box_size": source_box_size,
+                    "projected_units_from_stock": projected_units_from_stock,
+                    "projected_boxes_to_open": projected_boxes_to_open,
+                    "projected_units_leftover": projected_units_leftover,
+                    "sale": sale,
+                }
+            )
+
+        object.__setattr__(inventory, "active_reservations", payload)
+        return inventory
+
     ####################
     # Public methods
     ####################
@@ -301,7 +411,7 @@ class InventoryService:
         return self.repository.list(skip=skip, limit=limit, filters=filters)
 
     def get_inventory(self, inventory_id: int) -> Inventory:
-        return self._get_inventory_or_404(inventory_id)
+        return self._attach_active_reservations(self._get_inventory_or_404(inventory_id))
 
     def create_inventory(self, payload: InventoryCreate) -> Inventory:
         self._get_product_or_404(payload.product_id)
@@ -316,6 +426,7 @@ class InventoryService:
         movement_repository = InventoryMovementRepository(session)
         inventory = Inventory(
             stock=payload.stock,
+            reserved_stock=0,
             box_size=payload.box_size,
             avg_cost=Decimal("0.00"),
             last_cost=Decimal("0.00"),
@@ -400,6 +511,7 @@ class InventoryService:
 
             inventory = Inventory(
                 stock=payload.stock,
+                reserved_stock=0,
                 box_size=payload.box_size,
                 avg_cost=Decimal("0.00"),
                 last_cost=Decimal("0.00"),

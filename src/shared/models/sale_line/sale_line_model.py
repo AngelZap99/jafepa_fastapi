@@ -5,7 +5,7 @@ from sqlalchemy import Enum as SAEnum, Numeric
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
-from src.shared.enums.sale_enums import SaleLinePriceType
+from src.shared.enums.sale_enums import SaleLinePriceType, SaleLineQuantityMode
 from src.shared.models.base_model import MyBaseModel
 
 
@@ -23,12 +23,17 @@ class SaleLine(MyBaseModel, table=True):
         default=SaleLinePriceType.BOX,
         nullable=False,
     )
+    quantity_mode: SaleLineQuantityMode = Field(
+        default=SaleLineQuantityMode.BOX,
+        nullable=False,
+    )
     unit_price: Decimal = Field(sa_type=Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     box_price: Decimal = Field(sa_type=Numeric(12, 2), nullable=False, default=Decimal("0.00"))
     total_price: Decimal = Field(sa_type=Numeric(12, 2), nullable=False)
     product_code: Optional[str] = Field(default=None, max_length=100, index=True)
     product_name: Optional[str] = Field(default=None, max_length=250)
 
+    reservation_applied: bool = Field(default=False, nullable=False, index=True)
     inventory_applied: bool = Field(default=False, nullable=False, index=True)
 
     sale: Mapped[Optional["Sale"]] = Relationship(

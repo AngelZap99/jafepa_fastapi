@@ -76,7 +76,15 @@ class InvoiceCreateWithLines(InvoiceBase):
         if not self.lines:
             return self
 
-        keys = [(l.product_id, l.box_size) for l in self.lines]
+        keys = [
+            (
+                ("product_id", l.product_id)
+                if l.product_id is not None
+                else ("new_product_code", l.new_product.code if l.new_product else None),
+                l.box_size,
+            )
+            for l in self.lines
+        ]
         if len(keys) != len(set(keys)):
             raise ValueError(
                 "Duplicate (product, box_size) in invoice lines is not allowed"

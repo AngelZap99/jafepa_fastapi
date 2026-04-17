@@ -17,6 +17,7 @@ class Inventory(MyBaseModel, table=True):
     )
 
     stock: int = Field(nullable=False)
+    reserved_stock: int = Field(default=0, nullable=False)
     box_size: int = Field(nullable=False)
     avg_cost: Decimal = Field(
         default=Decimal("0.00"), sa_type=Numeric(12, 6), nullable=False
