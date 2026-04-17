@@ -188,6 +188,24 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
     product_id = created.json()["id"]
     assert created.json()["code"] == "SKU-1"
 
+    duplicated = client.post(
+        "/api/products/create",
+        data={
+            "name": "Product Test",
+            "code": "sku-1",
+            "description": "desc",
+            "category_id": str(category_id),
+            "brand_id": str(brand_id),
+        },
+    )
+    assert duplicated.status_code == 409, duplicated.text
+    duplicate_payload = duplicated.json()
+    assert (
+        duplicate_payload["message"]
+        == "Los datos del producto entran en conflicto con registros existentes."
+    )
+    assert len(duplicate_payload["errors"]) >= 1
+
     listed = client.get("/api/products/list")
     assert listed.status_code == 200, listed.text
     assert any(p["id"] == product_id for p in listed.json())

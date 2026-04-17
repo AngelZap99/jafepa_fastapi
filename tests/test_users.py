@@ -41,7 +41,8 @@ def test_create_admin_only_once(client):
         },
     )
     assert second.status_code == 409, second.text
-    assert second.json()["detail"] == "An admin user already exists"
+    assert second.json()["message"] == "Ya existe un usuario administrador"
+    assert second.json()["errors"] == []
 
 
 def test_user_can_be_deactivated_and_reactivated(client):
@@ -83,6 +84,9 @@ def test_create_user_rejects_invalid_role(client):
     )
 
     assert created.status_code == 422, created.text
+    data = created.json()
+    assert data["message"] == "Error de validación"
+    assert any(error["field"] == "role" for error in data["errors"])
 
 
 def test_update_user_can_change_role(client):

@@ -159,13 +159,19 @@ class InventoryService:
     def _upload_one_product_image(
         self, product_id: int, image: UploadFile
     ) -> tuple[str, str]:
-        self._image_validator.validate(
-            [image],
-            max_size_bytes=5 * 1024 * 1024,
-            allowed_extensions={".jpg", ".jpeg", ".png", ".webp"},
-            allowed_mime_types={"image/jpeg", "image/png", "image/webp"},
-            require_magic_bytes=True,
-        )
+        try:
+            self._image_validator.validate(
+                [image],
+                max_size_bytes=5 * 1024 * 1024,
+                allowed_extensions={".jpg", ".jpeg", ".png", ".webp"},
+                allowed_mime_types={"image/jpeg", "image/png", "image/webp"},
+                require_magic_bytes=True,
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
         return self._get_s3().upload_uploadfile(
             image,
             prefix=f"PRODUCT_IMAGES/{product_id}",

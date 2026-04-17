@@ -199,7 +199,68 @@ def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session, au
         headers=auth_headers,
     )
     assert paid.status_code == 409, paid.text
-    assert paid.json()["detail"] == "Inventory stock cannot be negative"
+    assert paid.json()["message"] == "El inventario no puede quedar en negativo"
+
+    sale_after = client.get(f"/api/sales/{sale_id}")
+    assert sale_after.status_code == 200, sale_after.text
+    assert sale_after.json()["status"] == "DRAFT"
+
+    movements = (
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.sale_line_id == sale_line_id)
+        ).all()
+    )
+    assert len(movements) == 0
+
+
+def test_create_sale_rejects_inactive_inventory(client, db_session):
+    inventory, client_obj = _seed_inventory_and_client(db_session, stock=4)
+    inventory.is_active = False
+    db_session.add(inventory)
+    db_session.commit()
+
+    created = client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [{"inventory_id": inventory.id, "quantity_units": 1, "price": "1.00"}],
+        },
+    )
+
+    assert created.status_code == 409, created.text
+    assert created.json()["message"] == "El inventario inactivo no puede usarse en ventas"
+
+
+def test_mark_paid_returns_409_if_inventory_is_inactive(client, db_session, auth_headers):
+    inventory, client_obj = _seed_inventory_and_client(db_session, stock=4)
+
+    created = client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [{"inventory_id": inventory.id, "quantity_units": 1, "price": "1.00"}],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale = created.json()
+    sale_id = sale["id"]
+    sale_line_id = sale["lines"][0]["id"]
+
+    inventory.is_active = False
+    db_session.add(inventory)
+    db_session.commit()
+
+    paid = client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+        headers=auth_headers,
+    )
+    assert paid.status_code == 409, paid.text
+    assert paid.json()["message"] == "El inventario inactivo no puede usarse en ventas"
 
     sale_after = client.get(f"/api/sales/{sale_id}")
     assert sale_after.status_code == 200, sale_after.text

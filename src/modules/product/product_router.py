@@ -1,7 +1,6 @@
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException, Query
-from fastapi.responses import JSONResponse
 from sqlmodel import select
 
 from src.shared.database.dependencies import SessionDep
@@ -46,12 +45,7 @@ def create_product(
     image_file: UploadFile | None = File(None),
     service: ProductService = Depends(get_product_service),
 ):
-    try:
-        return service.create_product(payload, image=image_file)
-    except HTTPException as e:
-        if e.status_code == 409:
-            return JSONResponse(status_code=409, content={"errors": e.detail})
-        raise e
+    return service.create_product(payload, image=image_file)
 
 @router.put("/update/{product_id}", response_model=ProductResponse)
 def update_product(
@@ -60,23 +54,11 @@ def update_product(
     image_file: UploadFile | None = File(None),
     service: ProductService = Depends(get_product_service),
 ):
-    try:
-        return service.update_product(product_id, payload, image=image_file)
-    except HTTPException as e:
-        if e.status_code == 409:
-            return JSONResponse(status_code=409, content={"errors": e.detail})
-        if e.status_code == 404:
-            return JSONResponse(status_code=404, content={"error": e.detail})
-        raise e
+    return service.update_product(product_id, payload, image=image_file)
 
 @router.delete("/delete/{product_id}", response_model=ProductResponse)
 def delete_product(product_id: int, service: ProductService = Depends(get_product_service)):
-    try:
-        return service.delete_product(product_id)
-    except HTTPException as e:
-        if e.status_code == 404:
-            return JSONResponse(status_code=404, content={"error": e.detail})
-        raise e
+    return service.delete_product(product_id)
 
 
 @router.get("/list-stock", response_model=list[ProductStockResponse])

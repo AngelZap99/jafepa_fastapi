@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import JSONResponse
 from typing import Optional
 from src.shared.database.dependencies import SessionDep
 
@@ -28,15 +27,6 @@ router = APIRouter(
 def get_inventory_service(session: SessionDep) -> InventoryService:
     repository = InventoryRepository(session)
     return InventoryService(repository)
-
-
-def _inventory_error_response(exc: HTTPException) -> JSONResponse:
-    detail = exc.detail
-    if isinstance(detail, dict):
-        content = detail
-    else:
-        content = {"message": str(detail)}
-    return JSONResponse(status_code=exc.status_code, content=content)
 
 
 def _parse_csv_ids(raw_value: str | None) -> list[int] | None:
@@ -107,10 +97,7 @@ def get_inventory(
     inventory_id: int,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    try:
-        return inventory_service.get_inventory(inventory_id)
-    except HTTPException as exc:
-        return _inventory_error_response(exc)
+    return inventory_service.get_inventory(inventory_id)
 
 
 @router.post(
@@ -122,10 +109,7 @@ def create_inventory(
     payload: InventoryCreate,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    try:
-        return inventory_service.create_inventory(payload)
-    except HTTPException as exc:
-        return _inventory_error_response(exc)
+    return inventory_service.create_inventory(payload)
 
 
 @router.post(
@@ -138,10 +122,7 @@ def create_inventory_with_product(
     image_file: UploadFile | None = File(None),
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    try:
-        return inventory_service.create_inventory_with_product(payload, image=image_file)
-    except HTTPException as exc:
-        return _inventory_error_response(exc)
+    return inventory_service.create_inventory_with_product(payload, image=image_file)
 
 
 @router.put(
@@ -154,10 +135,7 @@ def update_inventory(
     payload: InventoryUpdate,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    try:
-        return inventory_service.update_inventory(inventory_id, payload)
-    except HTTPException as exc:
-        return _inventory_error_response(exc)
+    return inventory_service.update_inventory(inventory_id, payload)
 
 
 @router.delete(
@@ -169,10 +147,7 @@ def delete_inventory(
     inventory_id: int,
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    try:
-        return inventory_service.delete_inventory(inventory_id)
-    except HTTPException as exc:
-        return _inventory_error_response(exc)
+    return inventory_service.delete_inventory(inventory_id)
 
 
 # --------------------------
@@ -194,15 +169,12 @@ def generate_all_inventory_pdf(
     ),
     inventory_service: InventoryService = Depends(get_inventory_service)
 ):
-    try:
-        filters = {
-            "categoria": categoria,
-            "marca": marca,
-            "almacen": almacen,
-            "buscar": buscar,
-            "exclude_ids": _parse_csv_ids(exclude_ids),
-        }
-        filters = {k: v for k, v in filters.items() if v is not None}
-        return inventory_service.generate_all_inventory_pdf(filters=filters)
-    except HTTPException as exc:
-        return _inventory_error_response(exc)
+    filters = {
+        "categoria": categoria,
+        "marca": marca,
+        "almacen": almacen,
+        "buscar": buscar,
+        "exclude_ids": _parse_csv_ids(exclude_ids),
+    }
+    filters = {k: v for k, v in filters.items() if v is not None}
+    return inventory_service.generate_all_inventory_pdf(filters=filters)

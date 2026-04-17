@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel, text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Importar modelos y routers
 import src.shared.models.register_models  # noqa: F401
@@ -13,6 +16,28 @@ from src.modules.router import api_router
 from src.shared.database.database_config import engine
 from src.shared.database.dependencies import SessionDep, get_session  # noqa: F401
 import src.shared.database.session_events  # noqa: F401
+from src.shared.exception_handlers import (
+    http_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
+
+
+def configure_logging() -> None:
+    log_level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_name, logging.INFO)
+    root_logger = logging.getLogger()
+
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+        )
+    else:
+        root_logger.setLevel(log_level)
+
+
+configure_logging()
 
 
 # =========================
@@ -47,6 +72,10 @@ app = FastAPI(
     version="0.0.1",
     lifespan=lifespan,
 )
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
 # =========================

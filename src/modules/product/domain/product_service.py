@@ -33,13 +33,19 @@ class ProductService:
     def _upload_one_product_image(
         self, product_id: int, image: UploadFile
     ) -> tuple[str, str]:
-        self.image_validator.validate(
-            [image],
-            max_size_bytes=5 * 1024 * 1024,
-            allowed_extensions={".jpg", ".jpeg", ".png", ".webp"},
-            allowed_mime_types={"image/jpeg", "image/png", ".webp"},
-            require_magic_bytes=True,
-        )
+        try:
+            self.image_validator.validate(
+                [image],
+                max_size_bytes=5 * 1024 * 1024,
+                allowed_extensions={".jpg", ".jpeg", ".png", ".webp"},
+                allowed_mime_types={"image/jpeg", "image/png", ".webp"},
+                require_magic_bytes=True,
+            )
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            ) from exc
         return self._get_s3().upload_uploadfile(
             image,
             prefix=f"PRODUCT_IMAGES/{product_id}",
@@ -60,7 +66,10 @@ class ProductService:
         if conflicts:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=conflicts,
+                detail={
+                    "message": "Product data conflicts with existing records",
+                    "errors": conflicts,
+                },
             )
 
         product = Product(
@@ -102,7 +111,10 @@ class ProductService:
         if conflicts:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=conflicts,
+                detail={
+                    "message": "Product data conflicts with existing records",
+                    "errors": conflicts,
+                },
             )
 
         for field, value in data.items():

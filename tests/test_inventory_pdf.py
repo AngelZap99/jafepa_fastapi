@@ -441,4 +441,5 @@ def test_inventory_pdf_returns_503_when_playwright_browser_is_missing(
     response = client.get("/api/inventory/pdf/all")
 
     assert response.status_code == 503, response.text
-    assert "playwright install chromium" in response.json()["message"]
+    assert response.json()["message"] == "Servicio no disponible"
+    assert response.json()["errors"] == []

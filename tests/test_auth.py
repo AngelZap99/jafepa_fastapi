@@ -42,7 +42,8 @@ def test_login_invalid_password_fails(client):
 
     resp = _login(client, email, "WrongPass1")
     assert resp.status_code == 401, resp.text
-    assert resp.json()["detail"] == "Invalid credentials"
+    assert resp.json()["message"] == "Credenciales inválidas"
+    assert resp.json()["errors"] == []
 
 
 def test_users_me_requires_token_and_returns_user(client):

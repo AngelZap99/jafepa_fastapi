@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WarehouseLineResponse(BaseModel):
@@ -28,3 +28,14 @@ class ClientLineResponse(BaseModel):
     phone: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ErrorDetailResponse(BaseModel):
+    field: str | None = None
+    message: str
+    code: str | None = None
+
+
+class ErrorResponse(BaseModel):
+    message: str
+    errors: list[ErrorDetailResponse] = Field(default_factory=list)

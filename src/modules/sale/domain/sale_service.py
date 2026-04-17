@@ -81,6 +81,11 @@ class SaleService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Inventory record not found",
             )
+        if not inventory.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Inactive inventory cannot be used in sales",
+            )
         return inventory
 
     def _get_user_display_name(self, user_id: int | None) -> str | None:
@@ -209,6 +214,11 @@ class SaleService:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Inventory record not found for sale line",
+                )
+            if not inventory.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Inactive inventory cannot be used in sales",
                 )
 
             quantity = self._sale_line_quantity_boxes(line)

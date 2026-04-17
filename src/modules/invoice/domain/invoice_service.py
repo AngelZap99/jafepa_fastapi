@@ -91,6 +91,8 @@ class InvoiceService:
         incoming_qty: int,
         incoming_unit_cost: Decimal,
     ) -> Decimal:
+        # This is a purchase-reference heuristic, not a pricing engine or accounting-grade cost.
+        # The business only needs a recent reference of how the product has been bought.
         recent_qty, recent_cost = movement_repository.get_recent_in_totals(
             inventory_id=inventory_id, months=6
         )

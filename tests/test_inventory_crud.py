@@ -191,7 +191,7 @@ def test_inventory_create_returns_404_for_missing_product_or_warehouse(client, d
         },
     )
     assert missing_product.status_code == 404, missing_product.text
-    assert missing_product.json()["message"] == "Product not found"
+    assert missing_product.json()["message"] == "Producto no encontrado"
 
     missing_warehouse = client.post(
         "/api/inventory/create",
@@ -204,7 +204,7 @@ def test_inventory_create_returns_404_for_missing_product_or_warehouse(client, d
         },
     )
     assert missing_warehouse.status_code == 404, missing_warehouse.text
-    assert missing_warehouse.json()["message"] == "Warehouse not found"
+    assert missing_warehouse.json()["message"] == "Almacén no encontrado"
 
 
 def test_inventory_create_returns_409_for_duplicate_unique_key(client, db_session):
@@ -223,7 +223,10 @@ def test_inventory_create_returns_409_for_duplicate_unique_key(client, db_sessio
 
     assert response.status_code == 409, response.text
     payload = response.json()
-    assert payload["message"] == "Inventory already exists for this product, warehouse, and box size"
+    assert (
+        payload["message"]
+        == "Ya existe un inventario para este producto, almacén y tamaño de caja."
+    )
     assert payload["errors"][0]["field"] == "product_id"
 
 

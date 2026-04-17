@@ -10,6 +10,29 @@ Objetivo:
 Regla de mantenimiento:
 - Cada cambio que modifique modelos, transiciones, side effects, cálculos o históricos debe actualizar este documento en el mismo PR o commit.
 
+## Contrato de Error
+
+- Todo error del backend debe responder con el mismo shape:
+  - `message: string`
+  - `errors: []`
+- Los mensajes orientados a usuario y validación deben ir en español.
+- Los errores internos del servidor deben responder con mensajes genéricos, sin exponer detalles técnicos.
+- Todo error manejado por el backend debe registrarse en logs con al menos: método HTTP, ruta, status, `message` y `errors`.
+- Para errores simples:
+  - `message` describe el problema
+  - `errors` va vacío
+- Para errores de validación o conflicto por campo:
+  - `message` describe el contexto general
+  - `errors` contiene objetos con:
+    - `field`
+    - `message`
+    - `code` opcional
+- Esto aplica a:
+  - `HTTPException`
+  - validaciones `422`
+  - rutas inexistentes
+  - errores internos `500`
+
 ## Alcance
 
 Este documento resume la lógica implementada actualmente en:
@@ -135,7 +158,8 @@ Implicación:
 
 #### Baja lógica
 - El borrado es soft delete: `is_active = False`.
-- Actualmente un inventario inactivo todavía puede ser referenciado por ventas si se usa su `id`.
+- Un inventario inactivo no debe participar en ventas nuevas ni en la aplicación de una venta `DRAFT -> PAID`.
+- Si una venta vieja ya lo referenciaba y luego se desactiva, cualquier nuevo intento de usarlo en ventas debe fallar.
 
 ### 3. Inventory Movement
 
@@ -215,9 +239,14 @@ Implicación:
 - El promedio se recalcula usando movimientos recientes de entrada.
 - La ventana actual es de 6 meses.
 - No está basado en stock vigente real.
+- Su intención en negocio es referencial:
+  - mostrar aproximadamente a cuánto se ha comprado el producto
+  - no fijar el precio de venta
+  - no funcionar como costeo contable fuerte
+- El precio de venta sigue dependiendo de la venta concreta y del cliente.
 
 Implicación:
-- El costo promedio actual es útil como heurística operativa, pero no como costeo contable robusto.
+- El costo promedio actual es útil como referencia operativa de compra, pero no como costeo contable robusto.
 
 #### Cargos adicionales
 - `general_expenses` se persiste como `logistic_tax`.
@@ -328,8 +357,6 @@ Implicación:
 
 ### Riesgos importantes
 - Facturas no tienen el mismo nivel de protección transaccional y locking que ventas.
-- El promedio de costo no representa necesariamente el costo real del stock vigente.
-- Un inventario inactivo todavía puede terminar en una venta si se referencia por `id`.
 - `quantity_units` en ventas no significa realmente unidades físicas en la lógica actual.
 - El histórico de movimientos mezcla dos criterios distintos de reversa.
 
