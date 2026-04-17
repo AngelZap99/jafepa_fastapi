@@ -1,47 +1,47 @@
-def test_brand_catalog_endpoints(client, catalog_seed):
-    listed = client.get("/api/brands/list")
+def test_brand_catalog_endpoints(auth_client, catalog_seed):
+    listed = auth_client.get("/api/brands/list")
     assert listed.status_code == 200, listed.text
 
-    created = client.post("/api/brands/create", json={"name": "Brand Test"})
+    created = auth_client.post("/api/brands/create", json={"name": "Brand Test"})
     assert created.status_code == 201, created.text
     brand_id = created.json()["id"]
 
-    got = client.get(f"/api/brands/{brand_id}")
+    got = auth_client.get(f"/api/brands/{brand_id}")
     assert got.status_code == 200, got.text
     assert got.json()["name"] == "Brand Test"
 
-    updated = client.put(f"/api/brands/update/{brand_id}", json={"name": "Brand Test 2"})
+    updated = auth_client.put(f"/api/brands/update/{brand_id}", json={"name": "Brand Test 2"})
     assert updated.status_code == 200, updated.text
     assert updated.json()["name"] == "Brand Test 2"
 
-    deleted = client.delete(f"/api/brands/delete/{brand_id}")
+    deleted = auth_client.delete(f"/api/brands/delete/{brand_id}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["is_active"] is False
 
 
-def test_category_catalog_endpoints(client, catalog_seed):
-    listed = client.get("/api/categories/list")
+def test_category_catalog_endpoints(auth_client, catalog_seed):
+    listed = auth_client.get("/api/categories/list")
     assert listed.status_code == 200, listed.text
 
-    created = client.post(
+    created = auth_client.post(
         "/api/categories/create",
         json={"name": "Category Test", "description": "Root"},
     )
     assert created.status_code == 201, created.text
     category_id = created.json()["id"]
 
-    got = client.get(f"/api/categories/{category_id}")
+    got = auth_client.get(f"/api/categories/{category_id}")
     assert got.status_code == 200, got.text
     assert got.json()["name"] == "Category Test"
 
-    updated = client.put(
+    updated = auth_client.put(
         f"/api/categories/update/{category_id}",
         json={"description": "Updated"},
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["description"] == "Updated"
 
-    deleted = client.delete(f"/api/categories/delete/{category_id}")
+    deleted = auth_client.delete(f"/api/categories/delete/{category_id}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["is_active"] is False
 
@@ -167,14 +167,14 @@ def test_client_create_normalizes_blank_email_and_phone_to_null(client, auth_hea
     assert data["phone"] is None
 
 
-def test_product_catalog_endpoints(client, catalog_seed, db_session):
+def test_product_catalog_endpoints(auth_client, catalog_seed, db_session):
     from src.shared.models.inventory.inventory_model import Inventory
 
     category_id = catalog_seed["category_id"]
     brand_id = catalog_seed["brand_id"]
     warehouse_id = catalog_seed["warehouse_id"]
 
-    created = client.post(
+    created = auth_client.post(
         "/api/products/create",
         data={
             "name": "Product Test",
@@ -188,7 +188,7 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
     product_id = created.json()["id"]
     assert created.json()["code"] == "SKU-1"
 
-    duplicated = client.post(
+    duplicated = auth_client.post(
         "/api/products/create",
         data={
             "name": "Product Test",
@@ -206,11 +206,11 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
     )
     assert len(duplicate_payload["errors"]) >= 1
 
-    listed = client.get("/api/products/list")
+    listed = auth_client.get("/api/products/list")
     assert listed.status_code == 200, listed.text
     assert any(p["id"] == product_id for p in listed.json())
 
-    got = client.get(f"/api/products/{product_id}")
+    got = auth_client.get(f"/api/products/{product_id}")
     assert got.status_code == 200, got.text
     assert got.json()["name"] == "Product Test"
 
@@ -227,14 +227,14 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
     )
     db_session.commit()
 
-    updated = client.put(
+    updated = auth_client.put(
         f"/api/products/update/{product_id}",
         data={"name": "Product Test 2"},
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["name"] == "Product Test 2"
 
-    stock = client.get(f"/api/products/list-stock?warehouse_id={warehouse_id}")
+    stock = auth_client.get(f"/api/products/list-stock?warehouse_id={warehouse_id}")
     assert stock.status_code == 200, stock.text
     product_stock = next((p for p in stock.json() if p["id"] == product_id), None)
     assert product_stock is not None
@@ -244,7 +244,7 @@ def test_product_catalog_endpoints(client, catalog_seed, db_session):
     assert product_stock["inventory"][0]["sales_last_price"] is None
     assert product_stock["inventory"][0]["sales_avg_price"] is None
 
-    deleted = client.delete(f"/api/products/delete/{product_id}")
+    deleted = auth_client.delete(f"/api/products/delete/{product_id}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["is_active"] is False
 from decimal import Decimal

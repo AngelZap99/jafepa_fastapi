@@ -61,14 +61,14 @@ def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventor
     return inventory, client
 
 
-def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_headers):
+def test_sale_can_be_marked_paid_and_applies_inventory(auth_client, db_session):
     starting_stock = 10
     quantity = 3
     unit_price = Decimal("2.50")
 
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=starting_stock)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -89,10 +89,9 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 200, paid.text
     paid_sale = paid.json()
@@ -126,13 +125,13 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_
     assert movements[-1].new_stock == starting_stock - quantity
 
 
-def test_marking_sale_paid_twice_is_idempotent(client, db_session, auth_headers):
+def test_marking_sale_paid_twice_is_idempotent(auth_client, db_session):
     starting_stock = 5
     quantity = 2
 
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=starting_stock)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -146,17 +145,15 @@ def test_marking_sale_paid_twice_is_idempotent(client, db_session, auth_headers)
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    first = client.put(
+    first = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert first.status_code == 200, first.text
 
-    second = client.put(
+    second = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert second.status_code == 200, second.text
 
@@ -174,10 +171,10 @@ def test_marking_sale_paid_twice_is_idempotent(client, db_session, auth_headers)
     assert len(movements) == 3
 
 
-def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session, auth_headers):
+def test_mark_paid_returns_409_if_stock_would_go_negative(auth_client, db_session):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=2)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -198,15 +195,14 @@ def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session, au
     db_session.add(inv)
     db_session.commit()
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 409, paid.text
     assert paid.json()["message"] == "El inventario no puede quedar en negativo"
 
-    sale_after = client.get(f"/api/sales/{sale_id}")
+    sale_after = auth_client.get(f"/api/sales/{sale_id}")
     assert sale_after.status_code == 200, sale_after.text
     assert sale_after.json()["status"] == "DRAFT"
 
@@ -219,13 +215,13 @@ def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session, au
     assert movements[0].event_type == InventoryEventType.SALE_RESERVED
 
 
-def test_create_sale_rejects_inactive_inventory(client, db_session):
+def test_create_sale_rejects_inactive_inventory(auth_client, db_session):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=4)
     inventory.is_active = False
     db_session.add(inventory)
     db_session.commit()
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -239,10 +235,10 @@ def test_create_sale_rejects_inactive_inventory(client, db_session):
     assert created.json()["message"] == "El inventario inactivo no puede usarse en ventas"
 
 
-def test_mark_paid_returns_409_if_inventory_is_inactive(client, db_session, auth_headers):
+def test_mark_paid_returns_409_if_inventory_is_inactive(auth_client, db_session):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=4)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -260,15 +256,14 @@ def test_mark_paid_returns_409_if_inventory_is_inactive(client, db_session, auth
     db_session.add(inventory)
     db_session.commit()
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 409, paid.text
     assert paid.json()["message"] == "El inventario inactivo no puede usarse en ventas"
 
-    sale_after = client.get(f"/api/sales/{sale_id}")
+    sale_after = auth_client.get(f"/api/sales/{sale_id}")
     assert sale_after.status_code == 200, sale_after.text
     assert sale_after.json()["status"] == "DRAFT"
 
@@ -281,11 +276,11 @@ def test_mark_paid_returns_409_if_inventory_is_inactive(client, db_session, auth
     assert movements[0].event_type == InventoryEventType.SALE_RESERVED
 
 
-def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers):
+def test_paid_sale_line_can_be_updated_in_place(auth_client, db_session):
     starting_stock = 120
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=starting_stock)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -306,14 +301,13 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 200, paid.text
 
-    updated = client.put(
+    updated = auth_client.put(
         f"/api/sales/{sale_id}/lines/{sale_line_id}",
         json={
             "quantity_boxes": 3,
@@ -345,7 +339,7 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers
     assert movements[-1].unit_value == Decimal("90.00")
 
 
-def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers):
+def test_paid_sale_accepts_add_and_delete_line(auth_client, db_session):
     inv1, client_obj = _seed_inventory_and_client(db_session, stock=120)
 
     # Seed a second inventory for the same client/warehouse flow.
@@ -373,7 +367,7 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers)
     db_session.add(inv2)
     db_session.commit()
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -393,14 +387,13 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers)
     sale = created.json()
     sale_id = sale["id"]
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 200, paid.text
 
-    added = client.post(
+    added = auth_client.post(
         f"/api/sales/{sale_id}/lines",
         json={
             "inventory_id": inv2.id,
@@ -418,7 +411,7 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers)
     assert inv2_after_add is not None
     assert inv2_after_add.stock == 59
 
-    deleted = client.delete(f"/api/sales/{sale_id}/lines/{added_line['id']}")
+    deleted = auth_client.delete(f"/api/sales/{sale_id}/lines/{added_line['id']}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["is_active"] is False
 
@@ -429,12 +422,12 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers)
 
 
 def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
-    client, db_session, auth_headers
+    auth_client, db_session
 ):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=20)
     sale_price = Decimal("5.00")
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -455,14 +448,13 @@ def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
     sale_id = sale["id"]
     sale_line_id = sale["lines"][0]["id"]
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 200, paid.text
 
-    first_metrics = client.get(
+    first_metrics = auth_client.get(
         "/api/products/list-stock",
         params={"warehouse_id": inventory.warehouse_id},
     )
@@ -471,14 +463,13 @@ def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
     assert first_item["sales_last_price"] == 5.0
     assert first_item["sales_avg_price"] == 5.0
 
-    reverted = client.put(
+    reverted = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "DRAFT"},
-        headers=auth_headers,
     )
     assert reverted.status_code == 200, reverted.text
 
-    reverted_metrics = client.get(
+    reverted_metrics = auth_client.get(
         "/api/products/list-stock",
         params={"warehouse_id": inventory.warehouse_id},
     )
@@ -487,20 +478,19 @@ def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
     assert reverted_item["sales_last_price"] is None
     assert reverted_item["sales_avg_price"] is None
 
-    updated = client.put(
+    updated = auth_client.put(
         f"/api/sales/{sale_id}/lines/{sale_line_id}",
         json={"price": "7.00", "price_type": "BOX"},
     )
     assert updated.status_code == 200, updated.text
 
-    repaid = client.put(
+    repaid = auth_client.put(
         f"/api/sales/update-status/{sale_id}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert repaid.status_code == 200, repaid.text
 
-    latest_metrics = client.get(
+    latest_metrics = auth_client.get(
         "/api/products/list-stock",
         params={"warehouse_id": inventory.warehouse_id},
     )
@@ -532,11 +522,11 @@ def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
 
 
 def test_draft_sale_allows_zero_price_but_paid_rejects_it(
-    client, db_session, auth_headers
+    auth_client, db_session
 ):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=6)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -556,10 +546,9 @@ def test_draft_sale_allows_zero_price_but_paid_rejects_it(
     assert inv.stock == 6
     assert inv.reserved_stock == 2
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale['id']}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 409, paid.text
     assert (
@@ -568,12 +557,11 @@ def test_draft_sale_allows_zero_price_but_paid_rejects_it(
     )
 
 
-def test_sale_tracks_creator_payer_and_canceller(client, db_session, auth_headers):
+def test_sale_tracks_creator_payer_and_canceller(auth_client, db_session):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=5)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
-        headers=auth_headers,
         json={
             "sale_date": date.today().isoformat(),
             "status": "DRAFT",
@@ -586,10 +574,9 @@ def test_sale_tracks_creator_payer_and_canceller(client, db_session, auth_header
     assert created_sale["created_by"] is not None
     assert created_sale["created_by_name"]
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{created_sale['id']}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 200, paid.text
     paid_sale = paid.json()
@@ -597,10 +584,9 @@ def test_sale_tracks_creator_payer_and_canceller(client, db_session, auth_header
     assert paid_sale["paid_by_name"]
     assert paid_sale["paid_at"] is not None
 
-    cancelled = client.put(
+    cancelled = auth_client.put(
         f"/api/sales/update-status/{created_sale['id']}",
         json={"status": "CANCELLED"},
-        headers=auth_headers,
     )
     assert cancelled.status_code == 200, cancelled.text
     cancelled_sale = cancelled.json()
@@ -610,7 +596,7 @@ def test_sale_tracks_creator_payer_and_canceller(client, db_session, auth_header
 
 
 def test_piece_sale_projects_box_opening_in_draft_and_executes_it_on_paid(
-    client, db_session, auth_headers
+    auth_client, db_session
 ):
     category = Category(name="Category Piezas")
     brand = Brand(name="Brand Piezas")
@@ -654,7 +640,7 @@ def test_piece_sale_projects_box_opening_in_draft_and_executes_it_on_paid(
     db_session.commit()
     db_session.refresh(box_inventory)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -706,10 +692,9 @@ def test_piece_sale_projects_box_opening_in_draft_and_executes_it_on_paid(
     ).all()
     assert [movement.event_type.value for movement in movements] == ["SALE_RESERVED"]
 
-    paid = client.put(
+    paid = auth_client.put(
         f"/api/sales/update-status/{sale['id']}",
         json={"status": "PAID"},
-        headers=auth_headers,
     )
     assert paid.status_code == 200, paid.text
 
@@ -737,7 +722,7 @@ def test_piece_sale_projects_box_opening_in_draft_and_executes_it_on_paid(
 
 
 def test_sale_can_mix_box_and_piece_lines_from_same_source_inventory(
-    client, db_session
+    auth_client, db_session
 ):
     category = Category(name="Category Mixta")
     brand = Brand(name="Brand Mixta")
@@ -781,7 +766,7 @@ def test_sale_can_mix_box_and_piece_lines_from_same_source_inventory(
     db_session.commit()
     db_session.refresh(box_inventory)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -809,7 +794,7 @@ def test_sale_can_mix_box_and_piece_lines_from_same_source_inventory(
     assert {line["quantity_mode"] for line in sale["lines"]} == {"BOX", "UNIT"}
 
 
-def test_piece_sale_projection_uses_existing_unit_stock(client, db_session):
+def test_piece_sale_projection_uses_existing_unit_stock(auth_client, db_session):
     category = Category(name="Category Proyeccion")
     brand = Brand(name="Brand Proyeccion")
     warehouse = Warehouse(
@@ -866,7 +851,7 @@ def test_piece_sale_projection_uses_existing_unit_stock(client, db_session):
     db_session.commit()
     db_session.refresh(box_inventory)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),

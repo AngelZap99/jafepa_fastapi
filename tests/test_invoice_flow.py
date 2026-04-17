@@ -15,7 +15,7 @@ from src.shared.models.product.product_model import Product
 
 
 def test_invoice_create_supports_optional_dates_general_expenses_and_unit_price(
-    client, db_session, catalog_seed
+    auth_client, db_session, catalog_seed
 ):
     from src.shared.models.category.category_model import Category
     from src.shared.models.brand.brand_model import Brand
@@ -40,7 +40,7 @@ def test_invoice_create_supports_optional_dates_general_expenses_and_unit_price(
     db_session.commit()
     db_session.refresh(product)
 
-    response = client.post(
+    response = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0001",
@@ -83,8 +83,8 @@ def test_invoice_create_supports_optional_dates_general_expenses_and_unit_price(
     assert Decimal(str(line["total_price"])) == Decimal("240.00")
 
 
-def test_invoice_update_accepts_general_expenses_field(client, catalog_seed):
-    created = client.post(
+def test_invoice_update_accepts_general_expenses_field(auth_client, catalog_seed):
+    created = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0002",
@@ -98,7 +98,7 @@ def test_invoice_update_accepts_general_expenses_field(client, catalog_seed):
 
     invoice_id = created.json()["id"]
 
-    updated = client.put(
+    updated = auth_client.put(
         f"/api/invoices/update/{invoice_id}",
         json={"general_expenses": "12.50"},
     )
@@ -112,7 +112,7 @@ def test_invoice_update_accepts_general_expenses_field(client, catalog_seed):
     assert Decimal(str(data["total"])) == Decimal("0.00")
 
 
-def test_arrived_invoice_registers_cost_movements(client, db_session, catalog_seed):
+def test_arrived_invoice_registers_cost_movements(auth_client, db_session, catalog_seed):
     from src.shared.models.category.category_model import Category
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.warehouse.warehouse_model import Warehouse
@@ -136,7 +136,7 @@ def test_arrived_invoice_registers_cost_movements(client, db_session, catalog_se
     db_session.commit()
     db_session.refresh(product)
 
-    response = client.post(
+    response = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0003",
@@ -168,7 +168,7 @@ def test_arrived_invoice_registers_cost_movements(client, db_session, catalog_se
     assert movement.unit_value == Decimal("25.00")
 
 
-def test_invoice_reversal_keeps_full_history_active_and_reapplies(client, db_session, catalog_seed):
+def test_invoice_reversal_keeps_full_history_active_and_reapplies(auth_client, db_session, catalog_seed):
     from src.shared.models.category.category_model import Category
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.warehouse.warehouse_model import Warehouse
@@ -192,7 +192,7 @@ def test_invoice_reversal_keeps_full_history_active_and_reapplies(client, db_ses
     db_session.commit()
     db_session.refresh(product)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0004",
@@ -215,13 +215,13 @@ def test_invoice_reversal_keeps_full_history_active_and_reapplies(client, db_ses
     invoice_id = invoice["id"]
     line_id = invoice["lines"][0]["id"]
 
-    reverted = client.put(
+    reverted = auth_client.put(
         f"/api/invoices/update-status/{invoice_id}",
         json={"status": "DRAFT"},
     )
     assert reverted.status_code == 200, reverted.text
 
-    reapplied = client.put(
+    reapplied = auth_client.put(
         f"/api/invoices/update-status/{invoice_id}",
         json={"status": "ARRIVED"},
     )
@@ -243,7 +243,7 @@ def test_invoice_reversal_keeps_full_history_active_and_reapplies(client, db_ses
         "INVOICE_RECEIVED",
     ]
 
-    movement_payload = client.get(
+    movement_payload = auth_client.get(
         "/api/inventory/movements",
         params={"invoice_line_id": line_id},
     )
@@ -255,7 +255,7 @@ def test_invoice_reversal_keeps_full_history_active_and_reapplies(client, db_ses
 
 
 def test_invoice_reversal_recomputes_inventory_costs_from_effective_history(
-    client, db_session, catalog_seed
+    auth_client, db_session, catalog_seed
 ):
     from src.shared.models.category.category_model import Category
     from src.shared.models.brand.brand_model import Brand
@@ -280,7 +280,7 @@ def test_invoice_reversal_recomputes_inventory_costs_from_effective_history(
     db_session.commit()
     db_session.refresh(product)
 
-    first = client.post(
+    first = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0005",
@@ -300,7 +300,7 @@ def test_invoice_reversal_recomputes_inventory_costs_from_effective_history(
     )
     assert first.status_code == 201, first.text
 
-    second = client.post(
+    second = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0006",
@@ -330,7 +330,7 @@ def test_invoice_reversal_recomputes_inventory_costs_from_effective_history(
     assert inventory.avg_cost == Decimal("15.00")
     assert inventory.last_cost == Decimal("20.00")
 
-    reverted = client.put(
+    reverted = auth_client.put(
         f"/api/invoices/update-status/{second.json()['id']}",
         json={"status": "DRAFT"},
     )
@@ -350,7 +350,7 @@ def test_invoice_reversal_recomputes_inventory_costs_from_effective_history(
 
 
 def test_arrived_invoice_is_idempotent_when_status_is_repeated(
-    client, db_session, catalog_seed
+    auth_client, db_session, catalog_seed
 ):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -375,7 +375,7 @@ def test_arrived_invoice_is_idempotent_when_status_is_repeated(
     db_session.commit()
     db_session.refresh(product)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0007",
@@ -397,13 +397,13 @@ def test_arrived_invoice_is_idempotent_when_status_is_repeated(
     invoice_id = created.json()["id"]
     line_id = created.json()["lines"][0]["id"]
 
-    first = client.put(
+    first = auth_client.put(
         f"/api/invoices/update-status/{invoice_id}",
         json={"status": "ARRIVED"},
     )
     assert first.status_code == 200, first.text
 
-    second = client.put(
+    second = auth_client.put(
         f"/api/invoices/update-status/{invoice_id}",
         json={"status": "ARRIVED"},
     )
@@ -426,7 +426,7 @@ def test_arrived_invoice_is_idempotent_when_status_is_repeated(
 
 
 def test_invoice_line_create_rejects_duplicate_product_and_box_size(
-    client, db_session, catalog_seed
+    auth_client, db_session, catalog_seed
 ):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -448,7 +448,7 @@ def test_invoice_line_create_rejects_duplicate_product_and_box_size(
     db_session.commit()
     db_session.refresh(product)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0008",
@@ -469,7 +469,7 @@ def test_invoice_line_create_rejects_duplicate_product_and_box_size(
     assert created.status_code == 201, created.text
     invoice_id = created.json()["id"]
 
-    duplicate = client.post(
+    duplicate = auth_client.post(
         f"/api/invoice-lines/create/{invoice_id}",
         json={
             "product_id": product.id,
@@ -488,7 +488,7 @@ def test_invoice_line_create_rejects_duplicate_product_and_box_size(
 
 
 def test_invoice_line_update_rejects_duplicate_product_and_box_size(
-    client, db_session, catalog_seed
+    auth_client, db_session, catalog_seed
 ):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -510,7 +510,7 @@ def test_invoice_line_update_rejects_duplicate_product_and_box_size(
     db_session.commit()
     db_session.refresh(product)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0009",
@@ -539,7 +539,7 @@ def test_invoice_line_update_rejects_duplicate_product_and_box_size(
     invoice = created.json()
     line_id = invoice["lines"][1]["id"]
 
-    duplicate = client.put(
+    duplicate = auth_client.put(
         f"/api/invoice-lines/update/{invoice['id']}/{line_id}",
         json={"box_size": 6},
     )
@@ -611,9 +611,9 @@ def test_invoice_line_db_constraint_blocks_duplicate_active_keys(
 
 
 def test_invoice_can_create_inline_product_and_receive_inventory(
-    client, db_session, catalog_seed
+    auth_client, db_session, catalog_seed
 ):
-    response = client.post(
+    response = auth_client.post(
         "/api/invoices/create",
         json={
             "invoice_number": "INV-0011",

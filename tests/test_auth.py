@@ -1,5 +1,5 @@
-def _create_user(client, email: str, password: str):
-    return client.post(
+def _create_user(auth_client, email: str, password: str):
+    return auth_client.post(
         "/api/users/createUser",
         json={
             "first_name": "Test",
@@ -14,10 +14,10 @@ def _login(client, email: str, password: str):
     return client.post("/api/auth/login", json={"email": email, "password": password})
 
 
-def test_login_success_returns_tokens(client):
+def test_login_success_returns_tokens(client, auth_client):
     email = "user@example.com"
     password = "StrongPass1"
-    created = _create_user(client, email, password)
+    created = _create_user(auth_client, email, password)
     assert created.status_code == 201, created.text
 
     resp = _login(client, email, password)
@@ -34,10 +34,10 @@ def test_login_success_returns_tokens(client):
     assert data["user"]["is_active"] is True
 
 
-def test_login_invalid_password_fails(client):
+def test_login_invalid_password_fails(client, auth_client):
     email = "user2@example.com"
     password = "StrongPass1"
-    created = _create_user(client, email, password)
+    created = _create_user(auth_client, email, password)
     assert created.status_code == 201, created.text
 
     resp = _login(client, email, "WrongPass1")
@@ -46,10 +46,10 @@ def test_login_invalid_password_fails(client):
     assert resp.json()["errors"] == []
 
 
-def test_users_me_requires_token_and_returns_user(client):
+def test_users_me_requires_token_and_returns_user(client, auth_client):
     email = "me@example.com"
     password = "StrongPass1"
-    created = _create_user(client, email, password)
+    created = _create_user(auth_client, email, password)
     assert created.status_code == 201, created.text
 
     no_token = client.get("/api/users/me")
@@ -65,10 +65,10 @@ def test_users_me_requires_token_and_returns_user(client):
     assert me.json()["email"] == email
 
 
-def test_refresh_token_rotates_tokens(client):
+def test_refresh_token_rotates_tokens(client, auth_client):
     email = "refresh@example.com"
     password = "StrongPass1"
-    created = _create_user(client, email, password)
+    created = _create_user(auth_client, email, password)
     assert created.status_code == 201, created.text
 
     login = _login(client, email, password)

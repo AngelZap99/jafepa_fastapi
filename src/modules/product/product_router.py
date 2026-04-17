@@ -16,6 +16,7 @@ from src.modules.product.domain.product_repository import ProductRepository
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.product.product_model import Product
 from src.shared.models.warehouse.warehouse_model import Warehouse
+from src.modules.auth.auth_dependencies import get_current_user
 from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
@@ -23,6 +24,7 @@ from src.modules.inventory.domain.inventory_movement_repository import (
 router = APIRouter(
     prefix="/products",
     tags=["products"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

@@ -1,4 +1,4 @@
-def test_create_user_defaults_to_non_admin(client):
+def test_create_user_defaults_to_non_admin(auth_client):
     payload = {
         "first_name": "Juan",
         "last_name": "Perez",
@@ -7,7 +7,7 @@ def test_create_user_defaults_to_non_admin(client):
         "is_admin": True,  # should be ignored server-side
     }
 
-    resp = client.post("/api/users/createUser", json=payload)
+    resp = auth_client.post("/api/users/createUser", json=payload)
     assert resp.status_code == 201, resp.text
 
     data = resp.json()
@@ -18,7 +18,7 @@ def test_create_user_defaults_to_non_admin(client):
     assert data["role"] == "Vendedor"
 
 
-def test_create_admin_only_once(client):
+def test_create_admin_only_once(auth_client):
     payload = {
         "first_name": "Admin",
         "last_name": "One",
@@ -26,12 +26,12 @@ def test_create_admin_only_once(client):
         "password": "StrongPass1",
     }
 
-    first = client.post("/api/users/createAdmin", json=payload)
+    first = auth_client.post("/api/users/createAdmin", json=payload)
     assert first.status_code == 201, first.text
     assert first.json()["is_admin"] is True
     assert first.json()["role"] == "Administrador"
 
-    second = client.post(
+    second = auth_client.post(
         "/api/users/createAdmin",
         json={
             "first_name": "Admin",
@@ -45,8 +45,8 @@ def test_create_admin_only_once(client):
     assert second.json()["errors"] == []
 
 
-def test_user_can_be_deactivated_and_reactivated(client):
-    created = client.post(
+def test_user_can_be_deactivated_and_reactivated(auth_client):
+    created = auth_client.post(
         "/api/users/createUser",
         json={
             "first_name": "Ana",
@@ -59,11 +59,11 @@ def test_user_can_be_deactivated_and_reactivated(client):
     user_id = created.json()["id"]
     assert created.json()["is_active"] is True
 
-    deactivated = client.delete(f"/api/users/delete/{user_id}")
+    deactivated = auth_client.delete(f"/api/users/delete/{user_id}")
     assert deactivated.status_code == 200, deactivated.text
     assert deactivated.json()["is_active"] is False
 
-    reactivated = client.patch(
+    reactivated = auth_client.patch(
         f"/api/users/status/{user_id}",
         json={"is_active": True},
     )
@@ -71,8 +71,8 @@ def test_user_can_be_deactivated_and_reactivated(client):
     assert reactivated.json()["is_active"] is True
 
 
-def test_create_user_rejects_invalid_role(client):
-    created = client.post(
+def test_create_user_rejects_invalid_role(auth_client):
+    created = auth_client.post(
         "/api/users/createUser",
         json={
             "first_name": "Mario",
@@ -89,8 +89,8 @@ def test_create_user_rejects_invalid_role(client):
     assert any(error["field"] == "role" for error in data["errors"])
 
 
-def test_update_user_can_change_role(client):
-    created = client.post(
+def test_update_user_can_change_role(auth_client):
+    created = auth_client.post(
         "/api/users/createUser",
         json={
             "first_name": "Luisa",
@@ -103,7 +103,7 @@ def test_update_user_can_change_role(client):
     assert created.status_code == 201, created.text
     user_id = created.json()["id"]
 
-    updated = client.put(
+    updated = auth_client.put(
         f"/api/users/update/{user_id}",
         json={"role": "Mixto"},
     )

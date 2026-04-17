@@ -24,6 +24,16 @@ Documento relacionado:
 - `src/shared/exception_handlers.py` es la unica via permitida para respuestas JSON de error.
 - No se deben agregar `JSONResponse(...)` manuales para errores en modulos nuevos.
 
+## Politica de Autenticacion
+
+- Todo endpoint de negocio bajo `/api/*` requiere usuario autenticado.
+- La unica excepcion publica actual es `auth`:
+  - `/api/auth/login`
+  - `/api/auth/refresh`
+- Esto aplica a catalogos, inventario, facturas, ventas, usuarios, clientes, almacenes y `bff`.
+- La proteccion vive a nivel router con `Depends(get_current_user)`.
+- Existe una prueba de arquitectura que falla si algun router de negocio pierde esa dependencia.
+
 ## Alcance
 
 Este documento resume la logica implementada actualmente en:

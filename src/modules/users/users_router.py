@@ -19,7 +19,7 @@ from src.modules.auth.auth_dependencies import get_current_user
 router = APIRouter(
     prefix="/users",
     tags=["users"],
-    # dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_user)],
 )
 
 

@@ -52,10 +52,10 @@ def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventor
     return inventory, client
 
 
-def test_inventory_detail_lists_active_reservations(client, db_session):
+def test_inventory_detail_lists_active_reservations(auth_client, db_session):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=8)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -75,7 +75,7 @@ def test_inventory_detail_lists_active_reservations(client, db_session):
     assert created.status_code == 201, created.text
     sale = created.json()
 
-    detail = client.get(f"/api/inventory/{inventory.id}")
+    detail = auth_client.get(f"/api/inventory/{inventory.id}")
     assert detail.status_code == 200, detail.text
     payload = detail.json()
     assert payload["stock"] == 8
@@ -91,10 +91,10 @@ def test_inventory_detail_lists_active_reservations(client, db_session):
     assert reservation["sale"]["client"]["id"] == client_obj.id
 
 
-def test_product_stock_bff_exposes_reserved_and_available_boxes(client, db_session):
+def test_product_stock_bff_exposes_reserved_and_available_boxes(auth_client, db_session):
     inventory, client_obj = _seed_inventory_and_client(db_session, stock=8)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -112,7 +112,7 @@ def test_product_stock_bff_exposes_reserved_and_available_boxes(client, db_sessi
     )
     assert created.status_code == 201, created.text
 
-    stock = client.get(
+    stock = auth_client.get(
         "/api/products/list-stock",
         params={"warehouse_id": inventory.warehouse_id},
     )
@@ -124,7 +124,7 @@ def test_product_stock_bff_exposes_reserved_and_available_boxes(client, db_sessi
     assert item["is_over_reserved"] is False
 
 
-def test_inventory_detail_projects_piece_reservations(client, db_session):
+def test_inventory_detail_projects_piece_reservations(auth_client, db_session):
     category = Category(name="Category Reservation Pieces")
     brand = Brand(name="Brand Reservation Pieces")
     warehouse = Warehouse(
@@ -180,7 +180,7 @@ def test_inventory_detail_projects_piece_reservations(client, db_session):
     db_session.refresh(unit_inventory)
     db_session.refresh(client_obj)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/sales/create",
         json={
             "sale_date": date.today().isoformat(),
@@ -198,7 +198,7 @@ def test_inventory_detail_projects_piece_reservations(client, db_session):
     )
     assert created.status_code == 201, created.text
 
-    detail = client.get(f"/api/inventory/{box_inventory.id}")
+    detail = auth_client.get(f"/api/inventory/{box_inventory.id}")
     assert detail.status_code == 200, detail.text
     payload = detail.json()
     assert len(payload["active_reservations"]) == 1

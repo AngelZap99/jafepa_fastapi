@@ -6,7 +6,7 @@ from src.modules.inventory.domain.inventory_repository import InventoryRepositor
 
 
 def test_inventory_pdf_all_supports_combined_filters_without_500(
-    client, db_session, monkeypatch
+    auth_client, db_session, monkeypatch
 ):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -90,7 +90,7 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
     db_session.refresh(matching_inventory)
     db_session.refresh(other_inventory)
 
-    response = client.get(
+    response = auth_client.get(
         "/api/inventory/pdf/all",
         params={
             "almacen": warehouse.name,
@@ -114,7 +114,7 @@ def test_inventory_pdf_all_supports_combined_filters_without_500(
 
 
 def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
-    client, db_session, monkeypatch
+    auth_client, db_session, monkeypatch
 ):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -196,7 +196,7 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
     db_session.refresh(inventory_a)
     db_session.refresh(inventory_b)
 
-    response = client.get(
+    response = auth_client.get(
         "/api/inventory/pdf/all",
         params={"exclude_ids": str(inventory_a.id)},
     )
@@ -209,7 +209,7 @@ def test_inventory_pdf_without_warehouse_filter_uses_selected_item_warehouse(
 
 
 def test_inventory_pdf_supports_excluding_multiple_ids_with_csv(
-    client, db_session, monkeypatch
+    auth_client, db_session, monkeypatch
 ):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
@@ -279,7 +279,7 @@ def test_inventory_pdf_supports_excluding_multiple_ids_with_csv(
     for inventory in inventories:
         db_session.refresh(inventory)
 
-    response = client.get(
+    response = auth_client.get(
         "/api/inventory/pdf/all",
         params={"exclude_ids": f"{inventories[0].id},{inventories[2].id}"},
     )
@@ -423,7 +423,7 @@ def test_pdf_generator_uses_nine_products_per_page(monkeypatch):
 
 
 def test_inventory_pdf_returns_503_when_playwright_browser_is_missing(
-    client, monkeypatch
+    auth_client, monkeypatch
 ):
     def raise_browser_missing(self, items, warehouse=None):
         raise RuntimeError(
@@ -438,7 +438,7 @@ def test_inventory_pdf_returns_503_when_playwright_browser_is_missing(
         raising=True,
     )
 
-    response = client.get("/api/inventory/pdf/all")
+    response = auth_client.get("/api/inventory/pdf/all")
 
     assert response.status_code == 503, response.text
     assert response.json()["message"] == "Servicio no disponible"

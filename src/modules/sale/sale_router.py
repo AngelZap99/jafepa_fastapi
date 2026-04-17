@@ -21,6 +21,7 @@ from src.modules.sale.domain.sale_repository import SaleRepository
 router = APIRouter(
     prefix="/sales",
     tags=["sales"],
+    dependencies=[Depends(get_current_user)],
 )
 
 

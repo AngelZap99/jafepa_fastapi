@@ -11,13 +11,13 @@ from src.modules.invoice.invoice_schema import (
 from src.modules.invoice.domain.invoice_service import InvoiceService
 from src.modules.invoice.domain.invoice_repository import InvoiceRepository
 
-# from src.modules.auth.auth_dependencies import get_current_user
+from src.modules.auth.auth_dependencies import get_current_user
 
 
 router = APIRouter(
     prefix="/invoices",
     tags=["invoices"],
-    # dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_user)],
 )
 
 

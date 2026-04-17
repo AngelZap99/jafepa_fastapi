@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 
-def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_session):
+def test_inventory_list_supports_filter_by_warehouse_name_and_id(auth_client, db_session):
     from src.shared.models.brand.brand_model import Brand
     from src.shared.models.category.category_model import Category
     from src.shared.models.inventory.inventory_model import Inventory
@@ -68,13 +68,13 @@ def test_inventory_list_supports_filter_by_warehouse_name_and_id(client, db_sess
     db_session.refresh(inventory_a)
     db_session.refresh(inventory_b)
 
-    by_name = client.get("/api/inventory/list", params={"almacen": warehouse_a.name})
+    by_name = auth_client.get("/api/inventory/list", params={"almacen": warehouse_a.name})
     assert by_name.status_code == 200, by_name.text
     by_name_ids = {item["id"] for item in by_name.json()}
     assert inventory_a.id in by_name_ids
     assert inventory_b.id not in by_name_ids
 
-    by_id = client.get("/api/inventory/list", params={"almacen": warehouse_b.id})
+    by_id = auth_client.get("/api/inventory/list", params={"almacen": warehouse_b.id})
     assert by_id.status_code == 200, by_id.text
     by_id_ids = {item["id"] for item in by_id.json()}
     assert inventory_b.id in by_id_ids

@@ -77,10 +77,10 @@ def _seed_inventory_catalog(
     }
 
 
-def test_inventory_list_returns_expanded_relations(client, db_session):
+def test_inventory_list_returns_expanded_relations(auth_client, db_session):
     data = _seed_inventory_catalog(db_session)
 
-    response = client.get("/api/inventory/list")
+    response = auth_client.get("/api/inventory/list")
 
     assert response.status_code == 200, response.text
     payload = response.json()
@@ -94,7 +94,7 @@ def test_inventory_list_returns_expanded_relations(client, db_session):
     assert item["product"]["brand"]["id"] == data["brand"].id
 
 
-def test_inventory_create_initializes_costs_and_registers_manual_movement(client, db_session):
+def test_inventory_create_initializes_costs_and_registers_manual_movement(auth_client, db_session):
     data = _seed_inventory_catalog(db_session)
     product = Product(
         name="Second product",
@@ -108,7 +108,7 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(client
     db_session.commit()
     db_session.refresh(product)
 
-    response = client.post(
+    response = auth_client.post(
         "/api/inventory/create",
         json={
             "product_id": product.id,
@@ -142,7 +142,7 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(client
     assert movement.new_stock == 7
 
 
-def test_inventory_create_with_zero_stock_does_not_register_movement(client, db_session):
+def test_inventory_create_with_zero_stock_does_not_register_movement(auth_client, db_session):
     data = _seed_inventory_catalog(db_session)
     product = Product(
         name="Third product",
@@ -156,7 +156,7 @@ def test_inventory_create_with_zero_stock_does_not_register_movement(client, db_
     db_session.commit()
     db_session.refresh(product)
 
-    response = client.post(
+    response = auth_client.post(
         "/api/inventory/create",
         json={
             "product_id": product.id,
@@ -178,7 +178,7 @@ def test_inventory_create_with_zero_stock_does_not_register_movement(client, db_
 
 
 def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_naive_datetimes(
-    client, db_session
+    auth_client, db_session
 ):
     data = _seed_inventory_catalog(db_session)
     product = Product(
@@ -193,7 +193,7 @@ def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_n
     db_session.commit()
     db_session.refresh(product)
 
-    created = client.post(
+    created = auth_client.post(
         "/api/inventory/create",
         json={
             "product_id": product.id,
@@ -208,7 +208,7 @@ def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_n
     assert payload["created_at"].endswith("+00:00")
     assert payload["updated_at"].endswith("+00:00")
 
-    movements = client.get("/api/inventory/movements")
+    movements = auth_client.get("/api/inventory/movements")
     assert movements.status_code == 200, movements.text
     movement = movements.json()[0]
     assert movement["movement_date"].endswith("+00:00")
@@ -219,17 +219,17 @@ def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_n
 
     naive_from = payload["created_at"].split("+")[0]
     aware_to = payload["created_at"]
-    filtered = client.get(
+    filtered = auth_client.get(
         "/api/inventory/movements",
         params={"from_date": naive_from, "to_date": aware_to},
     )
     assert filtered.status_code == 200, filtered.text
 
 
-def test_inventory_create_returns_404_for_missing_product_or_warehouse(client, db_session):
+def test_inventory_create_returns_404_for_missing_product_or_warehouse(auth_client, db_session):
     data = _seed_inventory_catalog(db_session)
 
-    missing_product = client.post(
+    missing_product = auth_client.post(
         "/api/inventory/create",
         json={
             "product_id": 999,
@@ -242,7 +242,7 @@ def test_inventory_create_returns_404_for_missing_product_or_warehouse(client, d
     assert missing_product.status_code == 404, missing_product.text
     assert missing_product.json()["message"] == "Producto no encontrado"
 
-    missing_warehouse = client.post(
+    missing_warehouse = auth_client.post(
         "/api/inventory/create",
         json={
             "product_id": data["product"].id,
@@ -256,10 +256,10 @@ def test_inventory_create_returns_404_for_missing_product_or_warehouse(client, d
     assert missing_warehouse.json()["message"] == "Almacén no encontrado"
 
 
-def test_inventory_create_returns_409_for_duplicate_unique_key(client, db_session):
+def test_inventory_create_returns_409_for_duplicate_unique_key(auth_client, db_session):
     data = _seed_inventory_catalog(db_session)
 
-    response = client.post(
+    response = auth_client.post(
         "/api/inventory/create",
         json={
             "product_id": data["product"].id,
@@ -279,10 +279,10 @@ def test_inventory_create_returns_409_for_duplicate_unique_key(client, db_sessio
     assert payload["errors"][0]["field"] == "product_id"
 
 
-def test_inventory_update_only_changes_allowed_fields_and_records_stock_delta(client, db_session):
+def test_inventory_update_only_changes_allowed_fields_and_records_stock_delta(auth_client, db_session):
     data = _seed_inventory_catalog(db_session, stock=10, box_size=4)
 
-    response = client.put(
+    response = auth_client.put(
         f"/api/inventory/update/{data['inventory'].id}",
         json={"stock": 6, "box_size": 5, "is_active": False},
     )
@@ -312,10 +312,10 @@ def test_inventory_update_only_changes_allowed_fields_and_records_stock_delta(cl
     assert movement.new_stock == 6
 
 
-def test_inventory_update_rejects_manual_cost_changes(client, db_session):
+def test_inventory_update_rejects_manual_cost_changes(auth_client, db_session):
     data = _seed_inventory_catalog(db_session)
 
-    response = client.put(
+    response = auth_client.put(
         f"/api/inventory/update/{data['inventory'].id}",
         json={"avg_cost": 20},
     )
@@ -324,7 +324,7 @@ def test_inventory_update_rejects_manual_cost_changes(client, db_session):
 
 
 def test_inventory_create_with_product_is_transactional_and_returns_expanded_inventory(
-    client, db_session, monkeypatch
+    auth_client, db_session, monkeypatch
 ):
     data = _seed_inventory_catalog(db_session)
 
@@ -335,7 +335,7 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
         raising=True,
     )
 
-    response = client.post(
+    response = auth_client.post(
         "/api/inventory/create-with-product",
         data={
             "name": "Created with inventory",
@@ -371,7 +371,7 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
 
 
 def test_inventory_create_with_product_rolls_back_product_on_conflict(
-    client, db_session, monkeypatch
+    auth_client, db_session, monkeypatch
 ):
     data = _seed_inventory_catalog(db_session)
 
@@ -396,7 +396,7 @@ def test_inventory_create_with_product_rolls_back_product_on_conflict(
         raising=True,
     )
 
-    response = client.post(
+    response = auth_client.post(
         "/api/inventory/create-with-product",
         data={
             "name": "Should rollback",

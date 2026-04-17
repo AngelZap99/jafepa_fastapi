@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from src.shared.database.dependencies import get_session
 
@@ -57,25 +57,62 @@ def db_session(sqlite_engine):
 
 
 @pytest.fixture()
-def auth_headers(client):
+def auth_headers(client, db_session):
+    from src.modules.users.domain.users_service import hash_password
+    from src.shared.models.user.user_model import User
+
     email = "tester@example.com"
     password = "StrongPass1"
-
-    created = client.post(
-        "/api/users/createUser",
-        json={
-            "first_name": "Test",
-            "last_name": "User",
-            "email": email,
-            "password": password,
-        },
-    )
-    assert created.status_code in {201, 409}, created.text
+    existing = db_session.exec(select(User).where(User.email == email)).first()
+    if existing is None:
+        db_session.add(
+            User(
+                first_name="Test",
+                last_name="User",
+                email=email,
+                password=hash_password(password),
+                is_admin=False,
+                is_active=True,
+                is_verified=True,
+            )
+        )
+        db_session.commit()
 
     login = client.post("/api/auth/login", json={"email": email, "password": password})
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def auth_client(client, auth_headers):
+    class AuthenticatedClient:
+        def __init__(self, base_client, default_headers):
+            self._client = base_client
+            self._headers = default_headers
+
+        def _merge_headers(self, headers=None):
+            merged = dict(self._headers)
+            if headers:
+                merged.update(headers)
+            return merged
+
+        def get(self, *args, headers=None, **kwargs):
+            return self._client.get(*args, headers=self._merge_headers(headers), **kwargs)
+
+        def post(self, *args, headers=None, **kwargs):
+            return self._client.post(*args, headers=self._merge_headers(headers), **kwargs)
+
+        def put(self, *args, headers=None, **kwargs):
+            return self._client.put(*args, headers=self._merge_headers(headers), **kwargs)
+
+        def patch(self, *args, headers=None, **kwargs):
+            return self._client.patch(*args, headers=self._merge_headers(headers), **kwargs)
+
+        def delete(self, *args, headers=None, **kwargs):
+            return self._client.delete(*args, headers=self._merge_headers(headers), **kwargs)
+
+    return AuthenticatedClient(client, auth_headers)
 
 
 @pytest.fixture()

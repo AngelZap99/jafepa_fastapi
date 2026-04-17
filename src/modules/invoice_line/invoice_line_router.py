@@ -12,13 +12,13 @@ from src.modules.invoice_line.domain.invoice_line_repository import (
     InvoiceLineRepository,
 )
 
-# from src.modules.auth.auth_dependencies import get_current_user
+from src.modules.auth.auth_dependencies import get_current_user
 
 
 router = APIRouter(
     prefix="/invoice-lines",
     tags=["invoice-lines"],
-    # dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_user)],
 )
 
 

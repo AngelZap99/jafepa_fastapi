@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 
 from src.modules.bff.bff_schema import (
@@ -23,9 +23,14 @@ from src.shared.models.sale.sale_model import Sale
 from src.shared.models.user.user_model import User
 from src.shared.models.warehouse.warehouse_model import Warehouse
 from src.shared.utils.datetime import utcnow
+from src.modules.auth.auth_dependencies import get_current_user
 
 
-router = APIRouter(prefix="/bff", tags=["bff"])
+router = APIRouter(
+    prefix="/bff",
+    tags=["bff"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 def _count(session: SessionDep, model, *filters) -> int:
