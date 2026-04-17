@@ -14,6 +14,7 @@ from src.shared.enums.inventory_enums import (
     InventorySourceType,
     InventoryValueType,
 )
+from src.shared.utils.datetime import utcnow
 
 
 class InventoryMovement(MyBaseModel, table=True):
@@ -24,7 +25,7 @@ class InventoryMovement(MyBaseModel, table=True):
         ),
     )
 
-    movement_date: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    movement_date: datetime = Field(default_factory=utcnow, nullable=False)
 
     movement_group_id: str = Field(
         default_factory=lambda: str(uuid4()), max_length=36, index=True

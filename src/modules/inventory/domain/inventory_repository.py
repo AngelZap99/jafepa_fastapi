@@ -1,5 +1,6 @@
 from typing import List
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased, joinedload, selectinload
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.category.category_model import Category
@@ -91,7 +92,7 @@ class InventoryRepository:
 
     def list(self, skip: int = 0, limit: int | None = None, filters: dict | None = None):
         q = (
-            self.db.query(Inventory)
+            select(Inventory)
             .options(
                 selectinload(Inventory.product).selectinload(Product.category),
                 selectinload(Inventory.product).selectinload(Product.brand),
@@ -101,16 +102,18 @@ class InventoryRepository:
         q = self._apply_inventory_filters(q, filters).offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
 
     def list_all(self, filters: dict = None):
-        query = self.db.query(Inventory).options(
+        query = select(Inventory).options(
             joinedload(Inventory.product).joinedload(Product.category),
             joinedload(Inventory.product).joinedload(Product.brand),
             joinedload(Inventory.warehouse),
         )
-        return self._apply_inventory_filters(query, filters).all()
+        return self.db.execute(
+            self._apply_inventory_filters(query, filters)
+        ).unique().scalars().all()
 
     def get_report_warehouse(
         self,
@@ -122,52 +125,53 @@ class InventoryRepository:
                 if item.warehouse and item.warehouse.is_active:
                     return item.warehouse
 
-        query = self.db.query(Warehouse).filter(Warehouse.is_active == True)  # noqa: E712
+        query = select(Warehouse).where(Warehouse.is_active == True)  # noqa: E712
 
         almacen = filters.get("almacen") if filters else None
         if almacen is not None and almacen != "":
             warehouse_id = self._parse_int_filter(almacen)
             if warehouse_id is not None:
-                return query.filter(Warehouse.id == warehouse_id).order_by(Warehouse.id).first()
+                return self.db.execute(
+                    query.where(Warehouse.id == warehouse_id).order_by(Warehouse.id)
+                ).scalars().first()
             return (
-                query.filter(Warehouse.name.ilike(almacen.strip()))
-                .order_by(Warehouse.id)
-                .first()
+                self.db.execute(
+                    query.where(Warehouse.name.ilike(almacen.strip())).order_by(Warehouse.id)
+                ).scalars().first()
             )
 
-        return query.order_by(Warehouse.id).first()
+        return self.db.execute(query.order_by(Warehouse.id)).scalars().first()
 
 
     def get(self, inventory_id: int) -> Inventory | None:
-        return (
-            self.db.query(Inventory)
+        return self.db.execute(
+            select(Inventory)
             .options(
                 selectinload(Inventory.product).selectinload(Product.category),
                 selectinload(Inventory.product).selectinload(Product.brand),
                 selectinload(Inventory.warehouse),
             )
-            .filter(Inventory.id == inventory_id)
-            .first()
-        )
+            .where(Inventory.id == inventory_id)
+        ).scalars().first()
 
     def get_by_keys(
         self, warehouse_id: int, product_id: int, box_size: int
     ) -> Inventory | None:
-        return (
-            self.db.query(Inventory)
-            .filter(
+        return self.db.execute(
+            select(Inventory).where(
                 Inventory.warehouse_id == warehouse_id,
                 Inventory.product_id == product_id,
                 Inventory.box_size == box_size,
             )
-            .first()
-        )
+        ).scalars().first()
 
     def warehouse_exists(self, warehouse_id: int) -> bool:
         return (
-            self.db.query(Warehouse.id)
-            .filter(Warehouse.id == warehouse_id, Warehouse.is_active == True)  # noqa: E712
-            .first()
+            self.db.execute(
+                select(Warehouse.id).where(
+                    Warehouse.id == warehouse_id, Warehouse.is_active == True  # noqa: E712
+                )
+            ).scalar_one_or_none()
             is not None
         )
 

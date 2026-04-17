@@ -9,7 +9,7 @@ from src.modules.category.category_schema import (
     CategoryUpdate,
 )
 from src.modules.category.domain.category_repository import CategoryRepository
-import datetime
+from src.shared.utils.datetime import utcnow
 
 
 class CategoryService:
@@ -74,5 +74,5 @@ class CategoryService:
     def delete_category(self, category_id: int) -> Category:
         category = self._get_category_or_404(category_id)
         category.is_active = False
-        category.deleted_at = datetime.datetime.utcnow()
+        category.deleted_at = utcnow()
         return self.repository.update(category)

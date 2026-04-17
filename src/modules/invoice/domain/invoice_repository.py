@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from src.shared.models.invoice.invoice_model import Invoice
@@ -16,7 +17,7 @@ class InvoiceRepository:
         self, skip: int = 0, limit: Optional[int] = None, include_inactive: bool = True
     ) -> List[Invoice]:
         q = (
-            self.db.query(Invoice)
+            select(Invoice)
             .options(
                 selectinload(Invoice.lines).selectinload(InvoiceLine.product),
                 selectinload(Invoice.warehouse),
@@ -25,27 +26,27 @@ class InvoiceRepository:
         )
 
         if not include_inactive:
-            q = q.filter(Invoice.is_active == True)  # noqa: E712
+            q = q.where(Invoice.is_active == True)  # noqa: E712
 
         q = q.offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def get(self, invoice_id: int, include_inactive: bool = False) -> Optional[Invoice]:
         q = (
-            self.db.query(Invoice)
+            select(Invoice)
             .options(
                 selectinload(Invoice.lines).selectinload(InvoiceLine.product),
                 selectinload(Invoice.warehouse),
             )
-            .filter(Invoice.id == invoice_id)
+            .where(Invoice.id == invoice_id)
         )
 
         if not include_inactive:
-            q = q.filter(Invoice.is_active == True)  # noqa: E712
+            q = q.where(Invoice.is_active == True)  # noqa: E712
 
-        return q.first()
+        return self.db.execute(q).scalars().first()
 
     def add(self, invoice: Invoice) -> Invoice:
         self.db.add(invoice)
@@ -83,15 +84,15 @@ class InvoiceRepository:
         self, invoice_id: int, line_id: int, include_inactive: bool = False
     ) -> Optional[InvoiceLine]:
         q = (
-            self.db.query(InvoiceLine)
+            select(InvoiceLine)
             .options(selectinload(InvoiceLine.product))
-            .filter(InvoiceLine.id == line_id, InvoiceLine.invoice_id == invoice_id)
+            .where(InvoiceLine.id == line_id, InvoiceLine.invoice_id == invoice_id)
         )
 
         if not include_inactive:
-            q = q.filter(InvoiceLine.is_active == True)  # noqa: E712
+            q = q.where(InvoiceLine.is_active == True)  # noqa: E712
 
-        return q.first()
+        return self.db.execute(q).scalars().first()
 
     def update_line(self, line: InvoiceLine) -> InvoiceLine:
         self.db.add(line)

@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+from sqlmodel import select
+
 from src.shared.enums.inventory_enums import InventoryValueType
 from src.shared.models.inventory_movement.inventory_movement_model import InventoryMovement
 from src.shared.models.product.product_model import Product
@@ -152,9 +154,9 @@ def test_arrived_invoice_registers_cost_movements(client, db_session, catalog_se
     line_id = invoice["lines"][0]["id"]
 
     movement = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.invoice_line_id == line_id)
-        .one()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.invoice_line_id == line_id)
+        ).one()
     )
     assert movement.value_type == InventoryValueType.COST
     assert movement.unit_cost == Decimal("25.00")

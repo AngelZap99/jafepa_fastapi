@@ -1,5 +1,5 @@
 # src/modules/category/domain/category_repository.py
-
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.shared.models.category.category_model import Category
 
@@ -9,16 +9,20 @@ class CategoryRepository:
         self.db = db
 
     def get(self, category_id: int) -> Category | None:
-        return self.db.query(Category).filter(Category.id == category_id).first()
+        return self.db.execute(
+            select(Category).where(Category.id == category_id)
+        ).scalars().first()
 
     def get_by_name(self, name: str) -> Category | None:
-        return self.db.query(Category).filter(Category.name == name).first()
+        return self.db.execute(
+            select(Category).where(Category.name == name)
+        ).scalars().first()
 
     def list(self, skip: int = 0, limit: int | None = None) -> list[Category]:
-        q = self.db.query(Category).offset(skip)
+        q = select(Category).offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def add(self, category: Category) -> Category:
         self.db.add(category)

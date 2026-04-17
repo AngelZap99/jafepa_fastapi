@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from src.modules.bff.bff_schema import (
     CatalogCounts,
@@ -22,16 +22,17 @@ from src.shared.models.product.product_model import Product
 from src.shared.models.sale.sale_model import Sale
 from src.shared.models.user.user_model import User
 from src.shared.models.warehouse.warehouse_model import Warehouse
+from src.shared.utils.datetime import utcnow
 
 
 router = APIRouter(prefix="/bff", tags=["bff"])
 
 
 def _count(session: SessionDep, model, *filters) -> int:
-    q = session.query(func.count(model.id))
+    stmt = select(func.count(model.id))
     if filters:
-        q = q.filter(*filters)
-    result = q.scalar()
+        stmt = stmt.where(*filters)
+    result = session.exec(stmt).one()
     return int(result or 0)
 
 
@@ -108,7 +109,7 @@ def get_system_summary(
     return SystemSummaryResponse(
         days=days,
         cutoff_date=cutoff,
-        generated_at=datetime.utcnow(),
+        generated_at=utcnow(),
         catalogs=catalogs,
         invoices=invoices,
         sales=sales,

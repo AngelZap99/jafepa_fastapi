@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 
@@ -21,19 +22,19 @@ class InvoiceLineRepository:
         include_inactive: bool = True,
     ) -> List[InvoiceLine]:
         q = (
-            self.db.query(InvoiceLine)
+            select(InvoiceLine)
             .options(selectinload(InvoiceLine.product))
-            .filter(InvoiceLine.invoice_id == invoice_id)
+            .where(InvoiceLine.invoice_id == invoice_id)
             .order_by(InvoiceLine.id)
         )
 
         if not include_inactive:
-            q = q.filter(InvoiceLine.is_active == True)  # noqa: E712
+            q = q.where(InvoiceLine.is_active == True)  # noqa: E712
 
         q = q.offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def get(
         self,
@@ -42,15 +43,15 @@ class InvoiceLineRepository:
         include_inactive: bool = False,
     ) -> Optional[InvoiceLine]:
         q = (
-            self.db.query(InvoiceLine)
+            select(InvoiceLine)
             .options(selectinload(InvoiceLine.product))
-            .filter(InvoiceLine.id == line_id, InvoiceLine.invoice_id == invoice_id)
+            .where(InvoiceLine.id == line_id, InvoiceLine.invoice_id == invoice_id)
         )
 
         if not include_inactive:
-            q = q.filter(InvoiceLine.is_active == True)  # noqa: E712
+            q = q.where(InvoiceLine.is_active == True)  # noqa: E712
 
-        return q.first()
+        return self.db.execute(q).scalars().first()
 
     def add(self, line: InvoiceLine) -> InvoiceLine:
         self.db.add(line)
@@ -59,11 +60,11 @@ class InvoiceLineRepository:
         return line
 
     def get_invoice(self, invoice_id: int) -> Optional[Invoice]:
-        return (
-            self.db.query(Invoice)
-            .filter(Invoice.id == invoice_id, Invoice.is_active == True)  # noqa: E712
-            .first()
-        )
+        return self.db.execute(
+            select(Invoice).where(
+                Invoice.id == invoice_id, Invoice.is_active == True  # noqa: E712
+            )
+        ).scalars().first()
 
     def update(self, line: InvoiceLine) -> InvoiceLine:
         # Ensure the instance is attached to the session

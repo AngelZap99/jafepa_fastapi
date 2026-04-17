@@ -1,6 +1,8 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
-from src.shared.models.product.product_model import Product
 from typing import List, Dict, Optional
+
+from src.shared.models.product.product_model import Product
 
 class ProductRepository:
     def __init__(self, db: Session):
@@ -8,7 +10,7 @@ class ProductRepository:
 
     def list(self, skip: int = 0, limit: Optional[int] = None):
         q = (
-            self.db.query(Product)
+            select(Product)
             .options(
                 selectinload(Product.category),
                 selectinload(Product.brand),
@@ -17,25 +19,28 @@ class ProductRepository:
         )
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def get(self, product_id: int) -> Product | None:
-        return (
-            self.db.query(Product)
+        return self.db.execute(
+            select(Product)
             .options(
                 selectinload(Product.category),
                 selectinload(Product.brand),
             )
-            .filter(Product.id == product_id)
-            .first()
-        )
+            .where(Product.id == product_id)
+        ).scalars().first()
 
     def get_by_code(self, code: str) -> Product | None:
         code = str(code).strip().upper()
-        return self.db.query(Product).filter(Product.code == code).first()
+        return self.db.execute(
+            select(Product).where(Product.code == code)
+        ).scalars().first()
 
     def get_by_name(self, name: str) -> Product | None:
-        return self.db.query(Product).filter(Product.name == name).first()
+        return self.db.execute(
+            select(Product).where(Product.name == name)
+        ).scalars().first()
 
     def add(self, product: Product, commit: bool = True) -> Product:
         self.db.add(product)

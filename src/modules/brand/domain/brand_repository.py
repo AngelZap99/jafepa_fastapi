@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.shared.models.brand.brand_model import Brand
 
@@ -7,16 +8,16 @@ class BrandRepository:
         self.db = db
 
     def list(self, skip: int = 0, limit: int | None = None):
-        q = self.db.query(Brand).offset(skip)
+        q = select(Brand).offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def get(self, brand_id: int) -> Brand | None:
-        return self.db.query(Brand).filter(Brand.id == brand_id).first()
+        return self.db.execute(select(Brand).where(Brand.id == brand_id)).scalars().first()
 
     def get_by_name(self, name: str) -> Brand | None:
-        return self.db.query(Brand).filter(Brand.name == name).first()
+        return self.db.execute(select(Brand).where(Brand.name == name)).scalars().first()
 
     def add(self, brand: Brand) -> Brand:
         self.db.add(brand)

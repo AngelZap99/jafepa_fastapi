@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+from sqlmodel import select
+
 from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
@@ -104,9 +106,9 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_
     assert inv.stock == starting_stock - quantity
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.sale_line_id == sale_line_id)
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.sale_line_id == sale_line_id)
+        ).all()
     )
     assert len(movements) == 1
     movement = movements[0]
@@ -160,9 +162,9 @@ def test_marking_sale_paid_twice_is_idempotent(client, db_session, auth_headers)
     assert inv.stock == starting_stock - quantity
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.sale_line_id == sale_line_id)
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.sale_line_id == sale_line_id)
+        ).all()
     )
     assert len(movements) == 1
 
@@ -204,9 +206,9 @@ def test_mark_paid_returns_409_if_stock_would_go_negative(client, db_session, au
     assert sale_after.json()["status"] == "DRAFT"
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.sale_line_id == sale_line_id)
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.sale_line_id == sale_line_id)
+        ).all()
     )
     assert len(movements) == 0
 
@@ -263,10 +265,11 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers
     assert inv.stock == starting_stock - (3 * inventory.box_size)
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.sale_line_id == sale_line_id)
-        .order_by(InventoryMovement.id)
-        .all()
+        db_session.exec(
+            select(InventoryMovement)
+            .where(InventoryMovement.sale_line_id == sale_line_id)
+            .order_by(InventoryMovement.id)
+        ).all()
     )
     assert len(movements) == 3
     assert movements[-1].quantity == 3 * inventory.box_size
@@ -278,9 +281,9 @@ def test_paid_sale_accepts_add_and_delete_line(client, db_session, auth_headers)
     inv1, client_obj = _seed_inventory_and_client(db_session, stock=120)
 
     # Seed a second inventory for the same client/warehouse flow.
-    category_obj = db_session.query(Category).first()
-    brand_obj = db_session.query(Brand).first()
-    warehouse_obj = db_session.query(Warehouse).first()
+    category_obj = db_session.exec(select(Category)).first()
+    brand_obj = db_session.exec(select(Brand)).first()
+    warehouse_obj = db_session.exec(select(Warehouse)).first()
     product = Product(
         name="Product 2",
         code="PROD-002",

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, Response, UploadFile, status
 from sqlalchemy.exc import IntegrityError
+from sqlmodel import select
 
 from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
@@ -74,9 +75,11 @@ class InventoryService:
 
     def _get_warehouse_or_404(self, warehouse_id: int) -> Warehouse:
         warehouse = (
-            self.repository.db.query(Warehouse)
-            .filter(Warehouse.id == warehouse_id, Warehouse.is_active == True)  # noqa: E712
-            .first()
+            self.repository.db.exec(
+                select(Warehouse).where(
+                    Warehouse.id == warehouse_id, Warehouse.is_active == True  # noqa: E712
+                )
+            ).first()
         )
         if not warehouse:
             raise HTTPException(
@@ -94,9 +97,11 @@ class InventoryService:
         session = self.repository.db
 
         category_exists = (
-            session.query(Category.id)
-            .filter(Category.id == category_id, Category.is_active == True)  # noqa: E712
-            .first()
+            session.exec(
+                select(Category.id).where(
+                    Category.id == category_id, Category.is_active == True  # noqa: E712
+                )
+            ).first()
         )
         if category_exists is None:
             raise HTTPException(
@@ -105,9 +110,11 @@ class InventoryService:
             )
 
         brand_exists = (
-            session.query(Brand.id)
-            .filter(Brand.id == brand_id, Brand.is_active == True)  # noqa: E712
-            .first()
+            session.exec(
+                select(Brand.id).where(
+                    Brand.id == brand_id, Brand.is_active == True  # noqa: E712
+                )
+            ).first()
         )
         if brand_exists is None:
             raise HTTPException(

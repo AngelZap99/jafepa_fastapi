@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException, status, Response
 from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlmodel import select
 
 from src.shared.enums.inventory_enums import (
     InventoryEventType,
@@ -187,10 +188,13 @@ class SaleService:
             if line.is_active and not line.inventory_applied
         ]
         inventories = (
-            session.query(Inventory)
-            .filter(Inventory.id.in_(inventory_ids))
-            .with_for_update()
-            .all()
+            list(
+                session.exec(
+                    select(Inventory)
+                    .where(Inventory.id.in_(inventory_ids))
+                    .with_for_update()
+                ).all()
+            )
             if inventory_ids
             else []
         )
@@ -253,10 +257,13 @@ class SaleService:
             if line.is_active and line.inventory_applied
         ]
         inventories = (
-            session.query(Inventory)
-            .filter(Inventory.id.in_(inventory_ids))
-            .with_for_update()
-            .all()
+            list(
+                session.exec(
+                    select(Inventory)
+                    .where(Inventory.id.in_(inventory_ids))
+                    .with_for_update()
+                ).all()
+            )
             if inventory_ids
             else []
         )
@@ -391,10 +398,11 @@ class SaleService:
             # eager outer joins (e.g., to `client`), and Postgres rejects
             # `FOR UPDATE` on the nullable side of an outer join.
             locked = (
-                session.query(Sale.id)
-                .filter(Sale.id == sale_id, Sale.is_active == True)  # noqa: E712
-                .with_for_update()
-                .first()
+                session.exec(
+                    select(Sale.id)
+                    .where(Sale.id == sale_id, Sale.is_active == True)  # noqa: E712
+                    .with_for_update()
+                ).first()
             )
             if not locked:
                 raise HTTPException(

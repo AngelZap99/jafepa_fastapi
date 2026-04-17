@@ -1,10 +1,11 @@
 from typing import List
+
 from fastapi import HTTPException, status
 
 from src.shared.models.brand.brand_model import Brand
 from src.modules.brand.brand_schema import BrandCreate, BrandUpdate
 from src.modules.brand.domain.brand_repository import BrandRepository
-import datetime
+from src.shared.utils.datetime import utcnow
 
 class BrandService:
     def __init__(self, repository: BrandRepository) -> None:
@@ -60,7 +61,7 @@ class BrandService:
 
     def delete_brand(self, brand_id: int) -> Brand:
         brand = self._get_brand_or_404(brand_id)
-        brand.deleted_at = datetime.datetime.utcnow()
+        brand.deleted_at = utcnow()
         brand.is_active = False
 
         return self.repository.update(brand)

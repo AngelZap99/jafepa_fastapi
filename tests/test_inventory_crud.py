@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from fastapi import HTTPException
+from sqlmodel import select
 
 from src.modules.inventory.domain.inventory_service import InventoryService
 from src.shared.enums.inventory_enums import (
@@ -126,9 +127,9 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(client
     assert payload["warehouse"]["id"] == data["warehouse"].id
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.inventory_id == payload["id"])
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.inventory_id == payload["id"])
+        ).all()
     )
     assert len(movements) == 1
     movement = movements[0]
@@ -169,9 +170,9 @@ def test_inventory_create_with_zero_stock_does_not_register_movement(client, db_
     assert response.status_code == 201, response.text
     payload = response.json()
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.inventory_id == payload["id"])
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.inventory_id == payload["id"])
+        ).all()
     )
     assert movements == []
 
@@ -243,9 +244,11 @@ def test_inventory_update_only_changes_allowed_fields_and_records_stock_delta(cl
     assert Decimal(str(payload["last_cost"])) == data["inventory"].last_cost
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.inventory_id == data["inventory"].id)
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(
+                InventoryMovement.inventory_id == data["inventory"].id
+            )
+        ).all()
     )
     assert len(movements) == 1
     movement = movements[0]
@@ -308,9 +311,9 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
     assert payload["product"]["image"] == f"https://example.com/{payload['product']['id']}.png"
 
     movements = (
-        db_session.query(InventoryMovement)
-        .filter(InventoryMovement.inventory_id == payload["id"])
-        .all()
+        db_session.exec(
+            select(InventoryMovement).where(InventoryMovement.inventory_id == payload["id"])
+        ).all()
     )
     assert len(movements) == 1
 
@@ -357,9 +360,7 @@ def test_inventory_create_with_product_rolls_back_product_on_conflict(
     )
 
     assert response.status_code == 409, response.text
-    product = (
-        db_session.query(Product)
-        .filter(Product.code == "INV-CWP-ROLLBACK")
-        .first()
-    )
+    product = db_session.exec(
+        select(Product).where(Product.code == "INV-CWP-ROLLBACK")
+    ).first()
     assert product is None

@@ -1,5 +1,5 @@
 # src/modules/warehouse/domain/warehouse_repository.py
-
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from src.shared.models.warehouse.warehouse_model import Warehouse
 
@@ -10,24 +10,20 @@ class WarehouseRepository:
         self.db = db
 
     def list(self, skip: int = 0, limit: int | None = None):
-        q = self.db.query(Warehouse).offset(skip)
+        q = select(Warehouse).offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def get(self, warehouse_id: int) -> Warehouse | None:
-        return (
-            self.db.query(Warehouse)
-            .filter(Warehouse.id == warehouse_id)
-            .first()
-        )
+        return self.db.execute(
+            select(Warehouse).where(Warehouse.id == warehouse_id)
+        ).scalars().first()
 
     def get_by_name(self, name: str) -> Warehouse | None:
-        return (
-            self.db.query(Warehouse)
-            .filter(Warehouse.name == name)
-            .first()
-        )
+        return self.db.execute(
+            select(Warehouse).where(Warehouse.name == name)
+        ).scalars().first()
 
     def add(self, warehouse: Warehouse) -> Warehouse:
         self.db.add(warehouse)

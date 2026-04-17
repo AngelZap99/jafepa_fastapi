@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from src.shared.models.sale.sale_model import Sale
@@ -18,7 +19,7 @@ class SaleRepository:
         self, skip: int = 0, limit: Optional[int] = None, include_inactive: bool = True
     ) -> List[Sale]:
         q = (
-            self.db.query(Sale)
+            select(Sale)
             .options(
                 selectinload(Sale.lines).selectinload(SaleLine.inventory),
                 selectinload(Sale.lines)
@@ -32,16 +33,16 @@ class SaleRepository:
         )
 
         if not include_inactive:
-            q = q.filter(Sale.is_active == True)  # noqa: E712
+            q = q.where(Sale.is_active == True)  # noqa: E712
 
         q = q.offset(skip)
         if limit is not None:
             q = q.limit(limit)
-        return q.all()
+        return self.db.execute(q).scalars().all()
 
     def get(self, sale_id: int, include_inactive: bool = False) -> Optional[Sale]:
         q = (
-            self.db.query(Sale)
+            select(Sale)
             .options(
                 selectinload(Sale.lines).selectinload(SaleLine.inventory),
                 selectinload(Sale.lines)
@@ -51,13 +52,13 @@ class SaleRepository:
                 .selectinload(SaleLine.inventory)
                 .selectinload(Inventory.warehouse),
             )
-            .filter(Sale.id == sale_id)
+            .where(Sale.id == sale_id)
         )
 
         if not include_inactive:
-            q = q.filter(Sale.is_active == True)  # noqa: E712
+            q = q.where(Sale.is_active == True)  # noqa: E712
 
-        return q.first()
+        return self.db.execute(q).scalars().first()
 
     def add(self, sale: Sale, commit: bool = True) -> Sale:
         self.db.add(sale)
@@ -100,19 +101,19 @@ class SaleRepository:
         self, sale_id: int, line_id: int, include_inactive: bool = False
     ) -> Optional[SaleLine]:
         q = (
-            self.db.query(SaleLine)
+            select(SaleLine)
             .options(
                 selectinload(SaleLine.inventory),
                 selectinload(SaleLine.inventory).selectinload(Inventory.product),
                 selectinload(SaleLine.inventory).selectinload(Inventory.warehouse),
             )
-            .filter(SaleLine.id == line_id, SaleLine.sale_id == sale_id)
+            .where(SaleLine.id == line_id, SaleLine.sale_id == sale_id)
         )
 
         if not include_inactive:
-            q = q.filter(SaleLine.is_active == True)  # noqa: E712
+            q = q.where(SaleLine.is_active == True)  # noqa: E712
 
-        return q.first()
+        return self.db.execute(q).scalars().first()
 
     def update_line(self, line: SaleLine, commit: bool = True) -> SaleLine:
         self.db.add(line)
@@ -146,7 +147,7 @@ class SaleRepository:
         inventory_id=None,
     ):
         q = (
-            self.db.query(SaleLine)
+            select(SaleLine)
             .join(SaleLine.sale)
             .options(
                 selectinload(SaleLine.inventory),
@@ -154,7 +155,7 @@ class SaleRepository:
                 selectinload(SaleLine.inventory).selectinload(Inventory.warehouse),
                 selectinload(SaleLine.sale).selectinload(Sale.client),
             )
-            .filter(
+            .where(
                 Sale.is_active == True,  # noqa: E712
                 SaleLine.is_active == True,  # noqa: E712
                 Sale.sale_date >= from_date,
@@ -163,17 +164,17 @@ class SaleRepository:
         )
 
         if status is not None:
-            q = q.filter(Sale.status == status)
+            q = q.where(Sale.status == status)
         if client_id is not None:
-            q = q.filter(Sale.client_id == client_id)
+            q = q.where(Sale.client_id == client_id)
         if inventory_id is not None:
-            q = q.filter(SaleLine.inventory_id == inventory_id)
+            q = q.where(SaleLine.inventory_id == inventory_id)
 
         if product_id is not None or warehouse_id is not None:
             q = q.join(Inventory)
             if product_id is not None:
-                q = q.filter(Inventory.product_id == product_id)
+                q = q.where(Inventory.product_id == product_id)
             if warehouse_id is not None:
-                q = q.filter(Inventory.warehouse_id == warehouse_id)
+                q = q.where(Inventory.warehouse_id == warehouse_id)
 
-        return q.order_by(Sale.id, SaleLine.id).all()
+        return self.db.execute(q.order_by(Sale.id, SaleLine.id)).scalars().all()

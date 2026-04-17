@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlmodel import Session
 
 from src.shared.enums.invoice_enums import InvoiceStatus
@@ -86,7 +87,11 @@ def _coerce_decimal(value: str | float | int, *, places: int = 2) -> Decimal:
 
 
 def _get_or_none_by(session: Session, model, **filters):
-    return session.query(model).filter_by(**filters).first()
+    return session.exec(select(model).filter_by(**filters)).first()
+
+
+def _count_rows(session: Session, model) -> int:
+    return int(session.exec(select(func.count()).select_from(model)).one() or 0)
 
 
 def _upsert(
@@ -118,7 +123,7 @@ def _upsert(
 def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -> None:
     insert_mode = config.insert_mode
 
-    existing_categories = session.query(Category).count()
+    existing_categories = _count_rows(session, Category)
 
     for i in range(1, config.categories + 1):
         idx = existing_categories + i
@@ -138,7 +143,7 @@ def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -
     session.commit()
 
     # Brands
-    existing_brands = session.query(Brand).count()
+    existing_brands = _count_rows(session, Brand)
     for i in range(1, config.brands + 1):
         idx = existing_brands + i
         name = f"Brand {idx}"
@@ -152,7 +157,7 @@ def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -
         )
 
     # Warehouses
-    existing_warehouses = session.query(Warehouse).count()
+    existing_warehouses = _count_rows(session, Warehouse)
     for i in range(1, config.warehouses + 1):
         idx = existing_warehouses + i
         name = f"Warehouse {idx}"
@@ -168,7 +173,7 @@ def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -
 
     # Clients
     # Keep email unique for re-runs without reset
-    existing_clients = session.query(Client).count()
+    existing_clients = _count_rows(session, Client)
     for i in range(1, config.clients + 1):
         idx = existing_clients + i
         email = f"client{idx}@example.com"
@@ -189,12 +194,12 @@ def seed_catalogs(*, session: Session, rng: random.Random, config: SeedConfig) -
 def seed_products(*, session: Session, rng: random.Random, config: SeedConfig) -> None:
     insert_mode = config.insert_mode
 
-    categories = session.query(Category).all()
-    brands = session.query(Brand).all()
+    categories = list(session.exec(select(Category)).all())
+    brands = list(session.exec(select(Brand)).all())
     if not categories or not brands:
         raise RuntimeError("Missing catalogs: seed catalogs before products.")
 
-    existing_products = session.query(Product).count()
+    existing_products = _count_rows(session, Product)
     for i in range(1, config.products + 1):
         idx = existing_products + i
         code = f"SKU{idx:05d}"
@@ -230,8 +235,12 @@ def seed_products(*, session: Session, rng: random.Random, config: SeedConfig) -
 
 
 def seed_invoices(*, session: Session, rng: random.Random, config: SeedConfig) -> None:
-    products = session.query(Product).filter(Product.is_active == True).all()  # noqa: E712
-    warehouses = session.query(Warehouse).filter(Warehouse.is_active == True).all()  # noqa: E712
+    products = list(
+        session.exec(select(Product).where(Product.is_active == True)).all()  # noqa: E712
+    )
+    warehouses = list(
+        session.exec(select(Warehouse).where(Warehouse.is_active == True)).all()  # noqa: E712
+    )
     if not products or not warehouses:
         raise RuntimeError("Missing products/warehouses: seed catalogs + products first.")
 
@@ -239,8 +248,10 @@ def seed_invoices(*, session: Session, rng: random.Random, config: SeedConfig) -
     invoice_service = InvoiceService(invoice_repo)
 
     # Continue sequences for re-runs without reset
-    max_sequence = session.query(Invoice.sequence).order_by(Invoice.sequence.desc()).first()
-    next_sequence = (max_sequence[0] if max_sequence else 0) + 1
+    max_sequence = session.exec(
+        select(Invoice.sequence).order_by(Invoice.sequence.desc())
+    ).first()
+    next_sequence = (max_sequence if max_sequence else 0) + 1
 
     box_sizes = [1, 6, 12, 24]
     for inv_i in range(config.invoices):
@@ -299,7 +310,9 @@ def seed_invoices(*, session: Session, rng: random.Random, config: SeedConfig) -
 
 
 def seed_sales(*, session: Session, rng: random.Random, config: SeedConfig) -> None:
-    clients = session.query(Client).filter(Client.is_active == True).all()  # noqa: E712
+    clients = list(
+        session.exec(select(Client).where(Client.is_active == True)).all()  # noqa: E712
+    )
     if not clients:
         raise RuntimeError("Missing clients: seed catalogs first.")
 
@@ -309,9 +322,13 @@ def seed_sales(*, session: Session, rng: random.Random, config: SeedConfig) -> N
     # Use live inventory so approval doesn't fail later.
     for _ in range(config.sales):
         inventories = (
-            session.query(Inventory)
-            .filter(Inventory.is_active == True, Inventory.stock > 0)  # noqa: E712
-            .all()
+            list(
+                session.exec(
+                    select(Inventory).where(
+                        Inventory.is_active == True, Inventory.stock > 0  # noqa: E712
+                    )
+                ).all()
+            )
         )
         if not inventories:
             break
@@ -362,7 +379,7 @@ def seed_sales(*, session: Session, rng: random.Random, config: SeedConfig) -> N
 
 def seed_summary(*, session: Session) -> str:
     def count(model) -> int:
-        return session.query(model).count()
+        return _count_rows(session, model)
 
     parts = [
         f"Seed complete:",

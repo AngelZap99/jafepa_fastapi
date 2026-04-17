@@ -1,5 +1,8 @@
+from collections import defaultdict
+
 from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException, Query
 from fastapi.responses import JSONResponse
+from sqlmodel import select
 
 from src.shared.database.dependencies import SessionDep
 from src.modules.product.product_schema import (
@@ -18,16 +21,16 @@ from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
 
-from collections import defaultdict
-
 router = APIRouter(
     prefix="/products",
     tags=["products"],
 )
 
+
 def get_product_service(session: SessionDep) -> ProductService:
     repository = ProductRepository(session)
     return ProductService(repository)
+
 
 @router.get("/list", response_model=list[ProductResponse])
 def list_products(
@@ -90,32 +93,40 @@ def list_products_with_stock(
     BFF endpoint for Sales UI:
     returns products + their inventory entries (and total stock) for a given warehouse.
     """
-    warehouse = session.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+    warehouse = session.exec(select(Warehouse).where(Warehouse.id == warehouse_id)).first()
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
 
-    inv_base_q = session.query(Inventory).filter(Inventory.warehouse_id == warehouse_id)
+    inv_base_q = select(Inventory).where(Inventory.warehouse_id == warehouse_id)
     if not include_inactive:
-        inv_base_q = inv_base_q.filter(Inventory.is_active == True)  # noqa: E712
+        inv_base_q = inv_base_q.where(Inventory.is_active == True)  # noqa: E712
 
-    product_ids_subq = inv_base_q.with_entities(Inventory.product_id).distinct().subquery()
-
-    q = session.query(Product).filter(Product.id.in_(product_ids_subq)).order_by(Product.id)
+    product_ids_stmt = (
+        select(Inventory.product_id)
+        .where(Inventory.warehouse_id == warehouse_id)
+        .distinct()
+    )
     if not include_inactive:
-        q = q.filter(Product.is_active == True)  # noqa: E712
+        product_ids_stmt = product_ids_stmt.where(Inventory.is_active == True)  # noqa: E712
+
+    q = select(Product).where(Product.id.in_(product_ids_stmt)).order_by(Product.id)
+    if not include_inactive:
+        q = q.where(Product.is_active == True)  # noqa: E712
     if search:
         s = f"%{search.strip()}%"
-        q = q.filter((Product.name.ilike(s)) | (Product.code.ilike(s)))
+        q = q.where((Product.name.ilike(s)) | (Product.code.ilike(s)))
 
     q = q.offset(skip)
     if limit is not None:
         q = q.limit(limit)
-    products = q.all()
+    products = list(session.exec(q).all())
     if not products:
         return []
 
     product_ids = [p.id for p in products]
-    inventories = inv_base_q.filter(Inventory.product_id.in_(product_ids)).all()
+    inventories = list(
+        session.exec(inv_base_q.where(Inventory.product_id.in_(product_ids))).all()
+    )
     movement_repo = InventoryMovementRepository(session)
     metrics_window_months = 12
 
