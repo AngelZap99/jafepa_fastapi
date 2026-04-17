@@ -206,6 +206,7 @@ Implicación:
 #### Reglas de edición
 - Una factura en `ARRIVED` no se puede editar.
 - Para editarla primero debe volver a `DRAFT`.
+- Las mutaciones de estado y de líneas se serializan bloqueando la fila de la factura durante la operación.
 
 #### Lógica de líneas
 - Cada línea maneja:
@@ -217,9 +218,12 @@ Implicación:
   - `price_type`
 - Si el precio llega como `UNIT`, el backend lo normaliza a precio por caja/presentación.
 - El schema de creación completa evita duplicados por `(product_id, box_size)`.
-- Los endpoints individuales de líneas no amarran esa misma regla con constraint de base de datos.
+- Los endpoints individuales de líneas usan la misma lógica del servicio principal de facturas.
+- Existe una restricción única para líneas activas por `(invoice_id, product_id, box_size)`.
+- Si se hace soft delete de una línea, esa combinación se puede volver a usar.
 
 #### Aplicación al inventario al pasar a ARRIVED
+- La transición bloquea la factura y los inventarios involucrados antes de aplicar stock.
 - Por cada `invoice_line` activa y no aplicada:
   - busca `inventory` por `warehouse + product + box_size`
   - si no existe, lo crea
@@ -230,6 +234,7 @@ Implicación:
   - marca `inventory_applied = True`
 
 #### Reversa al volver de ARRIVED
+- La transición bloquea la factura y los inventarios involucrados antes de revertir stock.
 - Por cada `invoice_line` aplicada:
   - resta stock
   - recalcula costo reciente

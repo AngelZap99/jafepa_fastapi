@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Optional
 from uuid import uuid4
 
+from sqlalchemy import tuple_
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
+from sqlmodel import select
 
 from src.shared.enums.invoice_enums import InvoiceLinePriceType
 from src.shared.models.invoice.invoice_model import Invoice
@@ -54,6 +57,72 @@ class InvoiceService:
     def __init__(self, repository: InvoiceRepository) -> None:
         self.repository = repository
 
+    def _raise_duplicate_line_conflict(self) -> None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "No se permite repetir la combinación de producto y tamaño de caja en las líneas de factura.",
+                "errors": [
+                    {
+                        "field": "product_id",
+                        "message": "El producto ya existe en otra línea activa de la factura.",
+                    },
+                    {
+                        "field": "box_size",
+                        "message": "El tamaño de caja ya existe para ese producto en la factura.",
+                    },
+                ],
+            },
+        )
+
+    def _ensure_invoice_line_unique(
+        self,
+        invoice: Invoice,
+        *,
+        product_id: int,
+        box_size: int,
+        current_line_id: int | None = None,
+    ) -> None:
+        for existing in invoice.lines:
+            if not existing.is_active:
+                continue
+            if current_line_id is not None and existing.id == current_line_id:
+                continue
+            if existing.product_id == product_id and existing.box_size == box_size:
+                self._raise_duplicate_line_conflict()
+
+    def _ensure_payload_lines_unique(self, payload: InvoiceCreateWithLines) -> None:
+        seen: set[tuple[int, int]] = set()
+        for line in payload.lines:
+            key = (line.product_id, line.box_size)
+            if key in seen:
+                self._raise_duplicate_line_conflict()
+            seen.add(key)
+
+    def _locked_inventory_map(
+        self, invoice: Invoice, *, applied_state: bool
+    ) -> dict[tuple[int, int], Inventory]:
+        session = self.repository.db
+        keys = {
+            (line.product_id, line.box_size)
+            for line in invoice.lines
+            if line.is_active and line.inventory_applied == applied_state
+        }
+        if not keys:
+            return {}
+
+        inventories = list(
+            session.exec(
+                select(Inventory)
+                .where(
+                    Inventory.warehouse_id == invoice.warehouse_id,
+                    tuple_(Inventory.product_id, Inventory.box_size).in_(list(keys)),
+                )
+                .with_for_update()
+            ).all()
+        )
+        return {(inventory.product_id, inventory.box_size): inventory for inventory in inventories}
+
     def _normalize_line_price(
         self,
         price: Decimal,
@@ -68,15 +137,32 @@ class InvoiceService:
         invoice = self.repository.get(invoice_id)
         if not invoice:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Factura no encontrada.",
             )
         return invoice
+
+    def _get_locked_invoice_or_404(self, invoice_id: int) -> Invoice:
+        locked = (
+            self.repository.db.exec(
+                select(Invoice.id)
+                .where(Invoice.id == invoice_id, Invoice.is_active == True)  # noqa: E712
+                .with_for_update()
+            ).first()
+        )
+        if not locked:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Factura no encontrada.",
+            )
+        return self._get_invoice_or_404(invoice_id)
 
     def _get_line_or_404(self, invoice_id: int, line_id: int) -> InvoiceLine:
         line = self.repository.get_line(invoice_id=invoice_id, line_id=line_id)
         if not line:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Invoice line not found"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Línea de factura no encontrada.",
             )
         return line
 
@@ -107,6 +193,7 @@ class InvoiceService:
         session = self.repository.db
         inventory_repository = InventoryRepository(session)
         movement_repository = InventoryMovementRepository(session)
+        inventory_map = self._locked_inventory_map(invoice, applied_state=False)
 
         movement_group_id = str(uuid4())
         movement_sequence = 1
@@ -119,11 +206,7 @@ class InvoiceService:
             if quantity <= 0:
                 continue
 
-            inventory = inventory_repository.get_by_keys(
-                warehouse_id=invoice.warehouse_id,
-                product_id=line.product_id,
-                box_size=line.box_size,
-            )
+            inventory = inventory_map.get((line.product_id, line.box_size))
 
             # Pricing agreement: invoices send `price` as the cost per box/presentation,
             # so the inventory movement value matches the line price (no multiplication by box_size).
@@ -140,6 +223,7 @@ class InvoiceService:
                 )
                 inventory_repository.add(inventory, commit=False)
                 session.flush()
+                inventory_map[(line.product_id, line.box_size)] = inventory
 
             if not inventory.is_active:
                 inventory.is_active = True
@@ -183,6 +267,7 @@ class InvoiceService:
         session = self.repository.db
         inventory_repository = InventoryRepository(session)
         movement_repository = InventoryMovementRepository(session)
+        inventory_map = self._locked_inventory_map(invoice, applied_state=True)
 
         movement_group_id = str(uuid4())
         movement_sequence = 1
@@ -195,15 +280,11 @@ class InvoiceService:
             if quantity <= 0:
                 continue
 
-            inventory = inventory_repository.get_by_keys(
-                warehouse_id=invoice.warehouse_id,
-                product_id=line.product_id,
-                box_size=line.box_size,
-            )
+            inventory = inventory_map.get((line.product_id, line.box_size))
             if inventory is None:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Inventory record not found for invoice line",
+                    detail="No se encontró el inventario para la línea de factura.",
                 )
 
             prev_stock = inventory.stock
@@ -211,7 +292,7 @@ class InvoiceService:
             if new_stock < 0:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Inventory stock cannot be negative",
+                    detail="El stock del inventario no puede quedar negativo.",
                 )
 
             inventory.stock = new_stock
@@ -262,8 +343,9 @@ class InvoiceService:
         if payload.status not in {InvoiceStatus.DRAFT, InvoiceStatus.ARRIVED}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Invoice must be created in DRAFT or ARRIVED status.",
+                detail="La factura solo se puede crear en estado DRAFT o ARRIVED.",
             )
+        self._ensure_payload_lines_unique(payload)
 
         session = self.repository.db
         invoice = Invoice(
@@ -318,9 +400,11 @@ class InvoiceService:
             if state == "23505":
                 constraint = _constraint_name(e)
                 if constraint == "uq_invoice_sequence":
-                    detail = "Invoice number or sequence already exists"
+                    detail = "Ya existe una factura con ese folio y secuencia."
+                elif constraint == "uq_invoice_line_active_keys":
+                    self._raise_duplicate_line_conflict()
                 else:
-                    detail = "Unique constraint violated"
+                    detail = "Se violó una restricción única."
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=detail,
@@ -328,11 +412,11 @@ class InvoiceService:
             if state == "23503":
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Invalid warehouse_id or product_id reference",
+                    detail="La factura referencia un almacén o producto inválido.",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Integrity constraint violated",
+                detail="No se pudo guardar la factura por una restricción de integridad.",
             )
         except Exception:
             session.rollback()
@@ -346,7 +430,7 @@ class InvoiceService:
         if invoice.status == InvoiceStatus.ARRIVED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify an ARRIVED invoice. Revert status first.",
+                detail="No se puede editar una factura ARRIVED. Primero regresa el estado.",
             )
         data = payload.model_dump(exclude_unset=True)
         if "general_expenses" in data:
@@ -358,20 +442,21 @@ class InvoiceService:
         try:
             self.repository.update(invoice)
         except IntegrityError as e:
+            self.repository.db.rollback()
             state = _sqlstate(e)
             if state == "23505":
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Invoice number or sequence already exists",
+                    detail="Ya existe una factura con ese folio y secuencia.",
                 )
             if state == "23503":
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Invalid warehouse_id reference",
+                    detail="La factura referencia un almacén inválido.",
                 )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Integrity constraint violated",
+                detail="No se pudo actualizar la factura por una restricción de integridad.",
             )
 
         return self._get_invoice_or_404(invoice_id)
@@ -379,33 +464,53 @@ class InvoiceService:
     def update_invoice_status(
         self, invoice_id: int, payload: InvoiceUpdateStatus
     ) -> Invoice:
-        invoice = self._get_invoice_or_404(invoice_id)
-        previous_status = invoice.status
-        new_status = payload.status
+        session = self.repository.db
+        try:
+            invoice = self._get_locked_invoice_or_404(invoice_id)
+            previous_status = invoice.status
+            new_status = payload.status
 
-        if previous_status == new_status:
-            return invoice
+            if previous_status == new_status:
+                session.commit()
+                return invoice
 
-        allowed_transitions = {
-            InvoiceStatus.DRAFT: {InvoiceStatus.ARRIVED, InvoiceStatus.CANCELLED},
-            InvoiceStatus.ARRIVED: {InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED},
-            InvoiceStatus.CANCELLED: {InvoiceStatus.DRAFT},
-        }
-        if new_status not in allowed_transitions.get(previous_status, set()):
+            allowed_transitions = {
+                InvoiceStatus.DRAFT: {InvoiceStatus.ARRIVED, InvoiceStatus.CANCELLED},
+                InvoiceStatus.ARRIVED: {InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED},
+                InvoiceStatus.CANCELLED: {InvoiceStatus.DRAFT},
+            }
+            if new_status not in allowed_transitions.get(previous_status, set()):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="La transición de estado no es válida.",
+                )
+
+            if new_status == InvoiceStatus.ARRIVED:
+                self._apply_invoice_received(invoice)
+            elif previous_status == InvoiceStatus.ARRIVED:
+                self._apply_invoice_unreceived(invoice)
+
+            invoice.status = new_status
+            session.add(invoice)
+            session.commit()
+        except IntegrityError as e:
+            session.rollback()
+            state = _sqlstate(e)
+            constraint = _constraint_name(e)
+            if state == "23505" and constraint == "uq_invoice_line_active_keys":
+                self._raise_duplicate_line_conflict()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Invalid status transition.",
+                detail="No se pudo actualizar el estado por una restricción de integridad.",
             )
+        except HTTPException:
+            session.rollback()
+            raise
+        except Exception:
+            session.rollback()
+            raise
 
-        if new_status == InvoiceStatus.ARRIVED:
-            self._apply_invoice_received(invoice)
-        elif previous_status == InvoiceStatus.ARRIVED:
-            self._apply_invoice_unreceived(invoice)
-
-        invoice.status = new_status
-        self.repository.db.add(invoice)
-        self.repository.db.commit()
-        self.repository.db.refresh(invoice)
+        session.refresh(invoice)
         return self._get_invoice_or_404(invoice_id)
 
     def delete_invoice(self, invoice_id: int) -> Invoice:
@@ -413,7 +518,7 @@ class InvoiceService:
         if invoice.status == InvoiceStatus.ARRIVED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot delete an ARRIVED invoice. Revert status first.",
+                detail="No se puede eliminar una factura ARRIVED. Primero regresa el estado.",
             )
         self.repository.soft_delete(invoice)
         return self.repository.get(invoice_id, include_inactive=True)  # type: ignore[return-value]
@@ -423,12 +528,17 @@ class InvoiceService:
     def add_invoice_line(
         self, invoice_id: int, payload: InvoiceLineCreate
     ) -> InvoiceLine:
-        invoice = self._get_invoice_or_404(invoice_id)
+        invoice = self._get_locked_invoice_or_404(invoice_id)
         if invoice.status == InvoiceStatus.ARRIVED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of an ARRIVED invoice. Revert status first.",
+                detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
             )
+        self._ensure_invoice_line_unique(
+            invoice,
+            product_id=payload.product_id,
+            box_size=payload.box_size,
+        )
 
         total_units = payload.box_size * payload.quantity_boxes
         normalized_price = self._normalize_line_price(
@@ -447,26 +557,40 @@ class InvoiceService:
 
         try:
             return self.repository.add_line(invoice, line)
-        except IntegrityError:
+        except IntegrityError as e:
+            self.repository.db.rollback()
+            if (
+                _sqlstate(e) == "23505"
+                and _constraint_name(e) == "uq_invoice_line_active_keys"
+            ):
+                self._raise_duplicate_line_conflict()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invalid product_id reference",
+                detail="La línea de factura referencia un producto inválido.",
             )
 
     def update_invoice_line(
         self, invoice_id: int, line_id: int, payload: InvoiceLineUpdate
     ) -> InvoiceLine:
+        invoice = self._get_locked_invoice_or_404(invoice_id)
         line = self._get_line_or_404(invoice_id, line_id)
-        if line.invoice and line.invoice.status == InvoiceStatus.ARRIVED:
+        if invoice.status == InvoiceStatus.ARRIVED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of an ARRIVED invoice. Revert status first.",
+                detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
             )
         data = payload.model_dump(exclude_unset=True)
+        next_product_id = data.get("product_id", line.product_id)
+        next_box_size = data.get("box_size", line.box_size)
+        self._ensure_invoice_line_unique(
+            invoice,
+            product_id=next_product_id,
+            box_size=next_box_size,
+            current_line_id=line.id,
+        )
         if "price" in data or "price_type" in data:
             next_price = data.get("price", line.price)
             next_price_type = data.get("price_type", line.price_type)
-            next_box_size = data.get("box_size", line.box_size)
             data["price"] = self._normalize_line_price(
                 price=next_price,
                 price_type=next_price_type,
@@ -481,17 +605,24 @@ class InvoiceService:
 
         try:
             return self.repository.update_line(line)
-        except IntegrityError:
+        except IntegrityError as e:
+            self.repository.db.rollback()
+            if (
+                _sqlstate(e) == "23505"
+                and _constraint_name(e) == "uq_invoice_line_active_keys"
+            ):
+                self._raise_duplicate_line_conflict()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invalid product_id reference",
+                detail="La línea de factura referencia un producto inválido.",
             )
 
     def delete_invoice_line(self, invoice_id: int, line_id: int) -> InvoiceLine:
+        invoice = self._get_locked_invoice_or_404(invoice_id)
         line = self._get_line_or_404(invoice_id, line_id)
-        if line.invoice and line.invoice.status == InvoiceStatus.ARRIVED:
+        if invoice.status == InvoiceStatus.ARRIVED:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Cannot modify lines of an ARRIVED invoice. Revert status first.",
+                detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
             )
         return self.repository.soft_delete_line(line)

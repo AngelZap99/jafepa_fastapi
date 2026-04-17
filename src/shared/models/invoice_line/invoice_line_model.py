@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Enum as SAEnum, Numeric
+from sqlalchemy import Enum as SAEnum, Index, Numeric, text
 from sqlalchemy.orm import Mapped
 from sqlmodel import Field, Relationship
 
@@ -11,6 +11,17 @@ from src.shared.models.base_model import MyBaseModel
 
 class InvoiceLine(MyBaseModel, table=True):
     __tablename__ = "invoice_line"
+    __table_args__ = (
+        Index(
+            "uq_invoice_line_active_keys",
+            "invoice_id",
+            "product_id",
+            "box_size",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
 
     invoice_id: int = Field(foreign_key="invoice.id", nullable=False, index=True)
     product_id: int = Field(foreign_key="product.id", nullable=False, index=True)
