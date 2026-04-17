@@ -12,6 +12,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 
 
@@ -144,6 +145,7 @@ class InventoryMovementFilters(BaseModel):
     source_type: Optional[InventorySourceType] = None
     event_type: Optional[InventoryEventType] = None
     movement_type: Optional[InventoryMovementType] = None
+    value_type: Optional[InventoryValueType] = None
 
     from_date: Optional[datetime] = None
     to_date: Optional[datetime] = None
@@ -193,6 +195,7 @@ class InventoryMovementResponse(BaseModel):
     source_type: InventorySourceType
     event_type: InventoryEventType
     movement_type: InventoryMovementType
+    value_type: InventoryValueType
     quantity: int
     unit_cost: Decimal
     prev_stock: int

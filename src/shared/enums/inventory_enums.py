@@ -20,3 +20,8 @@ class InventoryEventType(str, Enum):
 class InventoryMovementType(str, Enum):
     IN_ = "IN"  # Stock increases
     OUT = "OUT"  # Stock decreases
+
+
+class InventoryValueType(str, Enum):
+    COST = "COST"
+    PRICE = "PRICE"

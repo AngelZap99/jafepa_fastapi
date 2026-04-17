@@ -5,6 +5,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 from src.shared.models.brand.brand_model import Brand
 from src.shared.models.category.category_model import Category
@@ -112,6 +113,7 @@ def test_sale_can_be_marked_paid_and_applies_inventory(client, db_session, auth_
     assert movement.source_type == InventorySourceType.SALE
     assert movement.event_type == InventoryEventType.SALE_APPROVED
     assert movement.movement_type == InventoryMovementType.OUT
+    assert movement.value_type == InventoryValueType.PRICE
     assert movement.quantity == quantity
     assert movement.unit_cost == unit_price
     assert movement.prev_stock == starting_stock
@@ -268,6 +270,7 @@ def test_paid_sale_line_can_be_updated_in_place(client, db_session, auth_headers
     )
     assert len(movements) == 3
     assert movements[-1].quantity == 3 * inventory.box_size
+    assert movements[-1].value_type == InventoryValueType.PRICE
     assert movements[-1].unit_cost == Decimal("90.00")
 
 

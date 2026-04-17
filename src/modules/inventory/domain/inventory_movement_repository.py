@@ -14,6 +14,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 
 
@@ -53,6 +54,7 @@ class InventoryMovementRepository:
         source_type=None,
         event_type=None,
         movement_type=None,
+        value_type=None,
         from_date: datetime | None = None,
         to_date: datetime | None = None,
     ):
@@ -82,6 +84,9 @@ class InventoryMovementRepository:
 
         if movement_type is not None:
             q = q.filter(InventoryMovement.movement_type == movement_type)
+
+        if value_type is not None:
+            q = q.filter(InventoryMovement.value_type == value_type)
 
         if from_date is not None:
             q = q.filter(InventoryMovement.movement_date >= from_date)
@@ -127,6 +132,7 @@ class InventoryMovementRepository:
                 InventoryMovement.movement_type == InventoryMovementType.IN_,
                 InventoryMovement.source_type == InventorySourceType.INVOICE,
                 InventoryMovement.event_type == InventoryEventType.INVOICE_RECEIVED,
+                InventoryMovement.value_type == InventoryValueType.COST,
                 InventoryMovement.movement_date >= since_dt,
             )
             .one()
@@ -145,6 +151,7 @@ class InventoryMovementRepository:
                 InventoryMovement.movement_type == InventoryMovementType.IN_,
                 InventoryMovement.source_type == InventorySourceType.INVOICE,
                 InventoryMovement.event_type == InventoryEventType.INVOICE_RECEIVED,
+                InventoryMovement.value_type == InventoryValueType.COST,
                 InventoryMovement.movement_date >= since_dt,
             )
             .order_by(InventoryMovement.movement_date.desc())
@@ -170,6 +177,7 @@ class InventoryMovementRepository:
                 InventoryMovement.movement_type == InventoryMovementType.OUT,
                 InventoryMovement.source_type == InventorySourceType.SALE,
                 InventoryMovement.event_type == InventoryEventType.SALE_APPROVED,
+                InventoryMovement.value_type == InventoryValueType.PRICE,
                 InventoryMovement.movement_date >= since_dt,
             )
             .one()
@@ -188,6 +196,7 @@ class InventoryMovementRepository:
                 InventoryMovement.movement_type == InventoryMovementType.OUT,
                 InventoryMovement.source_type == InventorySourceType.SALE,
                 InventoryMovement.event_type == InventoryEventType.SALE_APPROVED,
+                InventoryMovement.value_type == InventoryValueType.PRICE,
                 InventoryMovement.movement_date >= since_dt,
             )
             .order_by(InventoryMovement.movement_date.desc())

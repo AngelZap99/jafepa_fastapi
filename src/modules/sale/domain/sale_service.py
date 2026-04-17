@@ -9,6 +9,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 from src.shared.enums.sale_enums import SaleLinePriceType, SaleStatus
 from src.shared.models.inventory_movement.inventory_movement_model import (
@@ -222,6 +223,7 @@ class SaleService:
                 source_type=InventorySourceType.SALE,
                 event_type=InventoryEventType.SALE_APPROVED,
                 movement_type=InventoryMovementType.OUT,
+                value_type=InventoryValueType.PRICE,
                 quantity=quantity,
                 unit_cost=line.price,
                 prev_stock=prev_stock,
@@ -282,6 +284,7 @@ class SaleService:
                 source_type=InventorySourceType.SALE,
                 event_type=InventoryEventType.SALE_REVERSED,
                 movement_type=InventoryMovementType.IN_,
+                value_type=InventoryValueType.PRICE,
                 quantity=quantity,
                 unit_cost=line.price,
                 prev_stock=prev_stock,

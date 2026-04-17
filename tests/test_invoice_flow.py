@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+from src.shared.enums.inventory_enums import InventoryValueType
+from src.shared.models.inventory_movement.inventory_movement_model import InventoryMovement
 from src.shared.models.product.product_model import Product
 
 
@@ -100,3 +102,59 @@ def test_invoice_update_accepts_general_expenses_field(client, catalog_seed):
     assert Decimal(str(data["general_expenses_total"])) == Decimal("0.00")
     assert Decimal(str(data["approximate_profit_total"])) == Decimal("0.00")
     assert Decimal(str(data["total"])) == Decimal("0.00")
+
+
+def test_arrived_invoice_registers_cost_movements(client, db_session, catalog_seed):
+    from src.shared.models.category.category_model import Category
+    from src.shared.models.brand.brand_model import Brand
+    from src.shared.models.warehouse.warehouse_model import Warehouse
+
+    category = db_session.get(Category, catalog_seed["category_id"])
+    brand = db_session.get(Brand, catalog_seed["brand_id"])
+    warehouse = db_session.get(Warehouse, catalog_seed["warehouse_id"])
+    assert category is not None
+    assert brand is not None
+    assert warehouse is not None
+
+    product = Product(
+        name="Producto factura costo",
+        code="FAC-001",
+        description=None,
+        category_id=category.id,
+        brand_id=brand.id,
+        image=None,
+    )
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+
+    response = client.post(
+        "/api/invoices/create",
+        json={
+            "invoice_number": "INV-0003",
+            "sequence": 3,
+            "status": "ARRIVED",
+            "warehouse_id": warehouse.id,
+            "lines": [
+                {
+                    "product_id": product.id,
+                    "box_size": 6,
+                    "quantity_boxes": 2,
+                    "price": "25.00",
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    invoice = response.json()
+    line_id = invoice["lines"][0]["id"]
+
+    movement = (
+        db_session.query(InventoryMovement)
+        .filter(InventoryMovement.invoice_line_id == line_id)
+        .one()
+    )
+    assert movement.value_type == InventoryValueType.COST
+    assert movement.unit_cost == Decimal("25.00")

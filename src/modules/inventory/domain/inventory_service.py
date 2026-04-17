@@ -22,6 +22,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 from src.shared.files.image_validator import ImageValidator
 from src.shared.files.upload_file_s3 import S3FileHandler
@@ -180,6 +181,7 @@ class InventoryService:
             source_type=InventorySourceType.MANUAL,
             event_type=event_type,
             movement_type=movement_type,
+            value_type=InventoryValueType.COST,
             quantity=quantity,
             unit_cost=inventory.last_cost,
             prev_stock=prev_stock,
@@ -522,6 +524,7 @@ class InventoryService:
             source_type=filters.source_type,
             event_type=filters.event_type,
             movement_type=filters.movement_type,
+            value_type=filters.value_type,
             from_date=filters.from_date,
             to_date=filters.to_date,
         )

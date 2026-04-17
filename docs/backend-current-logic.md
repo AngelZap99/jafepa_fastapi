@@ -146,6 +146,7 @@ Implicación:
 - `source_type`: `INVOICE`, `SALE`, `MANUAL`
 - `event_type`: evento concreto
 - `movement_type`: `IN` o `OUT`
+- `value_type`: `COST` o `PRICE`
 - `quantity`
 - `unit_cost`
 - `prev_stock`
@@ -154,12 +155,16 @@ Implicación:
 - `sale_line_id`
 
 #### Semántica actual
-- En compras, `unit_cost` sí representa costo de entrada.
-- En ventas, `unit_cost` guarda el precio usado en la venta, no el costo del inventario.
+- `unit_cost` se mantiene como nombre de campo por compatibilidad.
+- `value_type` es quien define qué significa ese valor:
+  - `COST`: costo de compra / costo de ajuste
+  - `PRICE`: precio de venta
+- En compras y ajustes manuales, `value_type = COST`.
+- En ventas, `value_type = PRICE`.
 
 Implicación:
-- El campo `unit_cost` está semánticamente sobrecargado.
-- Algunos reportes lo usan como precio promedio/último precio de venta.
+- El nombre `unit_cost` sigue siendo imperfecto, pero ya no queda ambiguo si se respeta `value_type`.
+- Algunos reportes de ventas siguen leyendo el mismo campo, pero para ventas deben interpretarlo junto con `value_type = PRICE`.
 
 ### 4. Invoices
 
@@ -317,7 +322,7 @@ Implicación:
 - El módulo de producto usa movimientos de salida para calcular:
   - último precio de venta
   - precio promedio reciente de venta
-- Esas métricas salen del campo `unit_cost` del movimiento.
+- Esas métricas salen del campo `unit_cost` del movimiento filtrado con `value_type = PRICE`.
 
 ## Riesgos y ambigüedades actuales
 
@@ -329,8 +334,8 @@ Implicación:
 - El histórico de movimientos mezcla dos criterios distintos de reversa.
 
 ### Riesgos de reporte
-- `unit_cost` en ventas realmente representa precio de venta.
-- El nombre del campo puede inducir reportes equivocados si se interpreta como costo.
+- El nombre `unit_cost` sigue pudiendo inducir error si alguien ignora `value_type`.
+- Cualquier reporte nuevo debe interpretar el valor monetario del movimiento usando ambos campos.
 
 ### Riesgos de consistencia
 - Algunas reglas viven en schema o servicio, pero no en constraint de base de datos.

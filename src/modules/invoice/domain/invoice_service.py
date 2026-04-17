@@ -17,6 +17,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 from src.shared.enums.invoice_enums import InvoiceStatus
 from src.modules.invoice.invoice_schema import (
@@ -160,6 +161,7 @@ class InvoiceService:
                 source_type=InventorySourceType.INVOICE,
                 event_type=InventoryEventType.INVOICE_RECEIVED,
                 movement_type=InventoryMovementType.IN_,
+                value_type=InventoryValueType.COST,
                 quantity=quantity,
                 unit_cost=unit_cost,
                 prev_stock=prev_stock,
@@ -230,6 +232,7 @@ class InvoiceService:
                 source_type=InventorySourceType.INVOICE,
                 event_type=InventoryEventType.INVOICE_UNRECEIVED,
                 movement_type=InventoryMovementType.OUT,
+                value_type=InventoryValueType.COST,
                 quantity=quantity,
                 unit_cost=line.price,
                 prev_stock=prev_stock,

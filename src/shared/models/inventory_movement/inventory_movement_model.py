@@ -12,6 +12,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 
 
@@ -33,6 +34,7 @@ class InventoryMovement(MyBaseModel, table=True):
     source_type: InventorySourceType = Field(nullable=False, index=True)
     event_type: InventoryEventType = Field(nullable=False, index=True)
     movement_type: InventoryMovementType = Field(nullable=False)
+    value_type: InventoryValueType = Field(nullable=False, index=True)
 
     quantity: int = Field(nullable=False, gt=0)
     unit_cost: Decimal = Field(sa_type=Numeric(12, 6), nullable=False)

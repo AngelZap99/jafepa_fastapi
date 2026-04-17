@@ -7,6 +7,7 @@ from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
     InventorySourceType,
+    InventoryValueType,
 )
 from src.shared.models.brand.brand_model import Brand
 from src.shared.models.category.category_model import Category
@@ -134,6 +135,7 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(client
     assert movement.source_type == InventorySourceType.MANUAL
     assert movement.event_type == InventoryEventType.MANUAL_CREATED
     assert movement.movement_type == InventoryMovementType.IN_
+    assert movement.value_type == InventoryValueType.COST
     assert movement.quantity == 7
     assert movement.prev_stock == 0
     assert movement.new_stock == 7
