@@ -33,19 +33,19 @@ class AuthService:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="Credenciales inválidas",
             )
 
         if not verify_password(password, user.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="Credenciales inválidas",
             )
 
         if not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User is inactive",
+                detail="El usuario está inactivo",
             )
 
         return user
@@ -75,28 +75,28 @@ class AuthService:
         except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
+                detail="El token de actualización no es válido",
             )
 
         token_type = payload.get("type")
         if token_type != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type",
+                detail="El tipo de token no es válido",
             )
 
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload",
+                detail="El contenido del token no es válido",
             )
 
         user = self.user_repository.get(int(user_id))
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive",
+                detail="El usuario no existe o está inactivo",
             )
 
         # Emitimos nuevos tokens

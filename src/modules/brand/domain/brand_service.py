@@ -19,7 +19,7 @@ class BrandService:
         if existing and (brand_owner_id is None or existing.id != brand_owner_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Brand '{name}' already exists",
+                detail=f"La marca '{name}' ya existe",
             )
 
     def _get_brand_or_404(self, brand_id: int) -> Brand:
@@ -27,7 +27,7 @@ class BrandService:
         if not brand:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Brand not found",
+                detail="Marca no encontrada",
             )
         return brand
 

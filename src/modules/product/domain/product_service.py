@@ -26,7 +26,7 @@ class ProductService:
         if not product:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found",
+                detail="Producto no encontrado",
             )
         return product
 
@@ -67,7 +67,7 @@ class ProductService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
-                    "message": "Product data conflicts with existing records",
+                    "message": "Los datos del producto entran en conflicto con registros existentes.",
                     "errors": conflicts,
                 },
             )
@@ -112,7 +112,7 @@ class ProductService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
-                    "message": "Product data conflicts with existing records",
+                    "message": "Los datos del producto entran en conflicto con registros existentes.",
                     "errors": conflicts,
                 },
             )

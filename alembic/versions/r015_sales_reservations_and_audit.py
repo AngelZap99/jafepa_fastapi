@@ -109,13 +109,13 @@ def upgrade() -> None:
         op.execute(
             """
             UPDATE sale_line
-            SET reservation_applied = 1
-            WHERE is_active = 1
-              AND inventory_applied = 0
+            SET reservation_applied = true
+            WHERE is_active = true
+              AND inventory_applied = false
               AND sale_id IN (
                   SELECT id
                   FROM sale
-                  WHERE is_active = 1
+                  WHERE is_active = true
                     AND status = 'DRAFT'
               )
             """
@@ -129,9 +129,9 @@ def upgrade() -> None:
                 FROM sale_line
                 JOIN sale ON sale.id = sale_line.sale_id
                 WHERE sale_line.inventory_id = inventory.id
-                  AND sale_line.is_active = 1
-                  AND sale_line.reservation_applied = 1
-                  AND sale.is_active = 1
+                  AND sale_line.is_active = true
+                  AND sale_line.reservation_applied = true
+                  AND sale.is_active = true
                   AND sale.status = 'DRAFT'
             )
             """

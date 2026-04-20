@@ -79,7 +79,7 @@ def list_products_with_stock(
     """
     warehouse = session.exec(select(Warehouse).where(Warehouse.id == warehouse_id)).first()
     if not warehouse:
-        raise HTTPException(status_code=404, detail="Warehouse not found")
+        raise HTTPException(status_code=404, detail="Almacén no encontrado")
 
     inv_base_q = select(Inventory).where(Inventory.warehouse_id == warehouse_id)
     if not include_inactive:

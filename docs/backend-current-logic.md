@@ -315,6 +315,8 @@ Compatibilidad:
 - `created_by` identifica quien creo la venta cuando hay usuario autenticado.
 - `paid_by` y `paid_at` se llenan al pasar `DRAFT -> PAID`.
 - `cancelled_by` y `cancelled_at` se llenan al pasar a `CANCELLED`.
+- `paid_by` y `cancelled_by` representan el ultimo evento historico registrado, no el estado actual obligatorio de la venta.
+- Si la venta vuelve a `DRAFT`, esos campos no se limpian; el estado vigente siempre se interpreta desde `status`.
 - `updated_by` sigue significando "ultimo usuario que modifico la fila".
 
 #### Logica de lineas

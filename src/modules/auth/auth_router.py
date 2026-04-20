@@ -49,5 +49,5 @@ def refresh_token(
     except Exception as e:  # noqa: F841
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail="El token de actualización no es válido",
         )

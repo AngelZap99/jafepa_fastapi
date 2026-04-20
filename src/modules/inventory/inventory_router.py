@@ -46,11 +46,11 @@ def _parse_csv_ids(raw_value: str | None) -> list[int] | None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={
-                    "message": "exclude_ids must be a comma-separated list of integers",
+                    "message": "La lista de inventarios a excluir debe contener IDs separados por comas.",
                     "errors": [
                         {
                             "field": "exclude_ids",
-                            "message": "Invalid inventory id list format",
+                            "message": "El formato de la lista de IDs de inventario no es válido.",
                         }
                     ],
                 },

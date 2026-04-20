@@ -43,13 +43,15 @@ class InvoiceLineCreate(InvoiceLineBase):
     @model_validator(mode="after")
     def validate_total_units(self):
         if (self.product_id is None) == (self.new_product is None):
-            raise ValueError("Debe enviarse product_id o new_product")
+            raise ValueError("Debes enviar un producto existente o capturar un producto nuevo")
         if self.total_units is None:
             return self
 
         expected = self.box_size * self.quantity_boxes
         if self.total_units != expected:
-            raise ValueError("total_units must equal box_size * quantity_boxes")
+            raise ValueError(
+                "El total de unidades debe coincidir con la cantidad de cajas y el tamaño de caja"
+            )
         return self
 
 
@@ -65,7 +67,7 @@ class InvoiceLineUpdate(BaseModel):
     @model_validator(mode="after")
     def at_least_one_field(self):
         if not self.model_dump(exclude_unset=True):
-            raise ValueError("At least one field must be provided")
+            raise ValueError("Debes enviar al menos un campo")
         return self
 
 

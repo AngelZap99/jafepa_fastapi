@@ -53,13 +53,13 @@ class InvoiceBase(BaseModel):
     def validate_dates(self):
         # Ensure dates follow a sensible timeline
         if self.order_date and self.order_date < self.invoice_date:
-            raise ValueError("order_date cannot be earlier than invoice_date")
+            raise ValueError("La fecha de orden no puede ser anterior a la fecha de factura")
         if (
             self.arrival_date
             and self.order_date
             and self.arrival_date < self.order_date
         ):
-            raise ValueError("arrival_date cannot be earlier than order_date")
+            raise ValueError("La fecha de llegada no puede ser anterior a la fecha de orden")
         return self
 
 
@@ -87,7 +87,7 @@ class InvoiceCreateWithLines(InvoiceBase):
         ]
         if len(keys) != len(set(keys)):
             raise ValueError(
-                "Duplicate (product, box_size) in invoice lines is not allowed"
+                "No se permite repetir la combinación de producto y tamaño de caja en las líneas de factura"
             )
         return self
 
@@ -125,7 +125,7 @@ class InvoiceUpdate(BaseModel):
     def at_least_one_field(self):
         # Prevent empty PATCH-like updates
         if not self.model_dump(exclude_unset=True):
-            raise ValueError("At least one field must be provided")
+            raise ValueError("Debes enviar al menos un campo")
         return self
 
 

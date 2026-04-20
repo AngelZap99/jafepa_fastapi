@@ -66,7 +66,7 @@ class InventoryUpdate(BaseModel):
     @model_validator(mode="after")
     def at_least_one_field(self):
         if not self.model_dump(exclude_unset=True):
-            raise ValueError("At least one field must be provided")
+            raise ValueError("Debes enviar al menos un campo")
         return self
 
 

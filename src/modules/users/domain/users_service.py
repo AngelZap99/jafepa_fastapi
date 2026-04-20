@@ -39,7 +39,7 @@ class UserService:
         if emailUser and (user_owner_id is None or emailUser.id != user_owner_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Email {email} is already taken",
+                detail=f"El correo {email} ya está en uso",
             )
 
     def _get_user_or_404(self, user_id: int) -> User:
@@ -47,7 +47,7 @@ class UserService:
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found",
+                detail="Usuario no encontrado",
             )
         return user
 
@@ -99,7 +99,7 @@ class UserService:
         if self.repository.admin_exists():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="An admin user already exists",
+                detail="Ya existe un usuario administrador",
             )
 
         self._ensure_email_not_taken(payload.email)

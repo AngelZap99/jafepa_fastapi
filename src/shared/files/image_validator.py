@@ -15,7 +15,7 @@ class ImageValidator:
         require_magic_bytes: bool = True,
     ) -> None:
         if not images:
-            raise ValueError("images cannot be empty")
+            raise ValueError("La lista de imágenes no puede estar vacía")
 
         allowed_extensions = allowed_extensions or {".jpg", ".jpeg", ".png", ".webp"}
         allowed_mime_types = allowed_mime_types or {"image/jpeg", "image/png", "image/webp"}
@@ -24,9 +24,11 @@ class ImageValidator:
             fileobj, filename, content_type = self._extract(item)
 
             if not hasattr(fileobj, "read"):
-                raise TypeError(f"Item at index {idx} is not readable")
+                raise TypeError(f"El elemento en la posición {idx} no se puede leer")
             if not hasattr(fileobj, "seek") or not hasattr(fileobj, "tell"):
-                raise TypeError(f"Item at index {idx} must be seekable (seek/tell required)")
+                raise TypeError(
+                    f"El elemento en la posición {idx} debe permitir seek y tell"
+                )
 
             # Size check
             pos = fileobj.tell()
@@ -35,18 +37,24 @@ class ImageValidator:
             fileobj.seek(pos)
 
             if max_size_bytes is not None and size > max_size_bytes:
-                raise ValueError(f"Image at index {idx} exceeds max size ({size} > {max_size_bytes})")
+                raise ValueError(
+                    f"La imagen en la posición {idx} excede el tamaño máximo permitido ({size} > {max_size_bytes})"
+                )
 
             # Extension check
             if filename:
                 _, ext = os.path.splitext(filename)
                 ext = ext.lower()
                 if ext not in allowed_extensions:
-                    raise ValueError(f"Image at index {idx} has invalid extension '{ext}'")
+                    raise ValueError(
+                        f"La imagen en la posición {idx} tiene una extensión no válida '{ext}'"
+                    )
 
             # MIME check (UploadFile only; do not fully trust it)
             if content_type and content_type not in allowed_mime_types:
-                raise ValueError(f"Image at index {idx} has invalid MIME type '{content_type}'")
+                raise ValueError(
+                    f"La imagen en la posición {idx} tiene un tipo MIME no válido '{content_type}'"
+                )
 
             # Magic bytes check (stronger than MIME/ext)
             if require_magic_bytes:
@@ -82,4 +90,6 @@ class ImageValidator:
         if len(head) >= 12 and head[:4] == b"RIFF" and head[8:12] == b"WEBP":
             return
 
-        raise ValueError(f"Image at index {idx} does not look like a valid JPG/PNG/WEBP by signature")
+        raise ValueError(
+            f"La imagen en la posición {idx} no parece ser un archivo JPG, PNG o WEBP válido"
+        )

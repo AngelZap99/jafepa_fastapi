@@ -64,7 +64,7 @@ class InventoryService:
         if not inventory:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Inventory record not found",
+                detail="Registro de inventario no encontrado",
             )
         return inventory
 
@@ -73,7 +73,7 @@ class InventoryService:
         if not product or not product.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found",
+                detail="Producto no encontrado",
             )
         return product
 
@@ -88,7 +88,7 @@ class InventoryService:
         if not warehouse:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Warehouse not found",
+                detail="Almacén no encontrado",
             )
         return warehouse
 
@@ -110,7 +110,7 @@ class InventoryService:
         if category_exists is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invalid category_id reference",
+                detail="La categoría seleccionada no es válida",
             )
 
         brand_exists = (
@@ -123,7 +123,7 @@ class InventoryService:
         if brand_exists is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Invalid brand_id reference",
+                detail="La marca seleccionada no es válida",
             )
 
     def _raise_conflict(self, message: str, errors: list[dict]) -> None:
@@ -147,15 +147,15 @@ class InventoryService:
         )
         if existing and existing.id != current_inventory_id:
             self._raise_conflict(
-                "Inventory already exists for this product, warehouse, and box size",
+                "Ya existe un inventario para este producto, almacén y tamaño de caja.",
                 [
                     {
                         "field": "product_id",
-                        "message": "Duplicate inventory for selected warehouse and box size",
+                        "message": "Ya existe un inventario para el almacén y tamaño de caja seleccionados.",
                     },
                     {
                         "field": "box_size",
-                        "message": "This box size already exists for the selected product and warehouse",
+                        "message": "Este tamaño de caja ya existe para el producto y almacén seleccionados.",
                     },
                 ],
             )
@@ -290,7 +290,7 @@ class InventoryService:
         if inventory is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Inventory record not found",
+                detail="Registro de inventario no encontrado",
             )
         return inventory
 
@@ -448,11 +448,11 @@ class InventoryService:
         except IntegrityError:
             session.rollback()
             self._raise_conflict(
-                "Inventory already exists for this product, warehouse, and box size",
+                "Ya existe un inventario para este producto, almacén y tamaño de caja.",
                 [
                     {
                         "field": "product_id",
-                        "message": "Duplicate inventory for selected warehouse and box size",
+                        "message": "Ya existe un inventario para el almacén y tamaño de caja seleccionados.",
                     }
                 ],
             )
@@ -477,7 +477,7 @@ class InventoryService:
         product_conflicts = product_repository.check_conflicts(payload)
         if product_conflicts:
             self._raise_conflict(
-                "Product data conflicts with an existing record",
+                "Los datos del producto entran en conflicto con un registro existente.",
                 product_conflicts,
             )
 
@@ -539,7 +539,7 @@ class InventoryService:
                 self._get_s3().delete_file(uploaded_key)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Integrity constraint violated while creating product inventory",
+                detail="No se pudo crear el inventario del producto.",
             ) from exc
         except Exception:
             session.rollback()
@@ -550,7 +550,7 @@ class InventoryService:
         if inventory is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Inventory could not be created",
+                detail="No se pudo crear el inventario.",
             )
 
         return self._expanded_inventory(inventory.id)
@@ -587,11 +587,11 @@ class InventoryService:
         except IntegrityError:
             session.rollback()
             self._raise_conflict(
-                "Inventory already exists for this product, warehouse, and box size",
+                "Ya existe un inventario para este producto, almacén y tamaño de caja.",
                 [
                     {
                         "field": "box_size",
-                        "message": "This box size already exists for the selected product and warehouse",
+                        "message": "Este tamaño de caja ya existe para el producto y almacén seleccionados.",
                     }
                 ],
             )

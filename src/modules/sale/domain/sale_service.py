@@ -330,7 +330,7 @@ class SaleService:
             return int(quantity_units), SaleLineQuantityMode.BOX
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Debe enviarse quantity_boxes o quantity_units.",
+            detail="Debes enviar la cantidad en cajas o la cantidad en piezas.",
         )
 
     def _preview_effective_inventory_key(

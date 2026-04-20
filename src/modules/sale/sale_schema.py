@@ -30,9 +30,9 @@ class SaleLineBase(BaseModel):
     @model_validator(mode="after")
     def validate_quantity(self):
         if self.quantity_boxes is None and self.quantity_units is None:
-            raise ValueError("Debe enviarse quantity_boxes o quantity_units")
+            raise ValueError("Debes enviar la cantidad en cajas o la cantidad en piezas")
         if self.quantity_boxes is not None and self.quantity_units is not None:
-            raise ValueError("Solo se permite quantity_boxes o quantity_units, no ambos")
+            raise ValueError("Solo puedes enviar una cantidad: en cajas o en piezas, no ambas")
         return self
 
 
@@ -53,9 +53,9 @@ class SaleLineUpdate(BaseModel):
     @model_validator(mode="after")
     def at_least_one_field(self):
         if not self.model_dump(exclude_unset=True):
-            raise ValueError("At least one field must be provided")
+            raise ValueError("Debes enviar al menos un campo")
         if self.quantity_boxes is not None and self.quantity_units is not None:
-            raise ValueError("Solo se permite quantity_boxes o quantity_units, no ambos")
+            raise ValueError("Solo puedes enviar una cantidad: en cajas o en piezas, no ambas")
         return self
 
 
@@ -125,7 +125,7 @@ class SaleUpdate(BaseModel):
     @model_validator(mode="after")
     def at_least_one_field(self):
         if not self.model_dump(exclude_unset=True):
-            raise ValueError("At least one field must be provided")
+            raise ValueError("Debes enviar al menos un campo")
         return self
 
 

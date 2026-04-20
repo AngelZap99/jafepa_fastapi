@@ -48,6 +48,7 @@ Reglas adicionales:
 - `updated_by` deja de ser el campo principal para semántica de negocio en ventas.
 - `updated_by` puede seguir significando "último usuario que modificó la fila".
 - `paid_by` y `cancelled_by` no deben sobreescribirse con cambios posteriores de edición.
+- `paid_by` y `cancelled_by` representan el último evento histórico registrado para la venta, no necesariamente el estado vigente si la venta se reabre.
 
 ### 3. Modo de apartado en ventas `DRAFT`
 

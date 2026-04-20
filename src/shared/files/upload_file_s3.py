@@ -28,7 +28,7 @@ class S3FileHandler:
     ) -> None:
         self.bucket_name = bucket_name or os.getenv("AWS_S3_BUCKET")
         if not self.bucket_name:
-            raise ValueError("Missing env AWS_S3_BUCKET")
+            raise ValueError("Falta configurar AWS_S3_BUCKET")
 
         self.region_name = region_name or os.getenv("AWS_REGION", "us-east-1")
 
@@ -42,7 +42,7 @@ class S3FileHandler:
         secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
         if not access_key or not secret_key:
             raise ValueError(
-                "Missing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in .env"
+                "Falta configurar AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY en el entorno"
             )
 
         self.s3_client = boto3.client(
@@ -68,7 +68,7 @@ class S3FileHandler:
 
     def _normalize_s3_key(self, file_path_or_url: str) -> str:
         if not file_path_or_url:
-            raise ValueError("file_path_or_url cannot be empty")
+            raise ValueError("La ruta o URL del archivo no puede estar vacía")
 
         value = file_path_or_url.strip()
 
@@ -138,7 +138,7 @@ class S3FileHandler:
             )
             return key, self._build_public_url(key)
         except (BotoCoreError, ClientError) as exc:
-            raise RuntimeError(f"Failed to upload file to S3: {exc}") from exc
+            raise RuntimeError(f"No se pudo subir el archivo a S3: {exc}") from exc
 
     def upload_uploadfile(
         self,
@@ -167,9 +167,9 @@ class S3FileHandler:
         prefix: str = "files",
     ) -> list[tuple[str, str]]:
         if object_keys is not None and len(files) != len(object_keys):
-            raise ValueError("files and object_keys must have the same length")
+            raise ValueError("La cantidad de archivos y claves de objeto debe coincidir")
         if content_types is not None and len(content_types) != len(files):
-            raise ValueError("content_types must have the same length as files")
+            raise ValueError("La cantidad de tipos de contenido debe coincidir con la cantidad de archivos")
 
         out: list[tuple[str, str]] = []
         for i, f in enumerate(files):

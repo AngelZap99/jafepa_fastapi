@@ -21,7 +21,7 @@ class CategoryService:
         if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Category not found",
+                detail="Categoría no encontrada",
             )
         return category
 
@@ -35,7 +35,7 @@ class CategoryService:
         if existing and (category_owner_id is None or existing.id != category_owner_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Category '{name}' already exists.",
+                detail=f"La categoría '{name}' ya existe.",
             )
 
     def list_categories(self, skip: int = 0, limit: int | None = None) -> List[Category]:

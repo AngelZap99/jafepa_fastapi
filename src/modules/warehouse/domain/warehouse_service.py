@@ -26,7 +26,7 @@ class WarehouseService:
         if existing and (warehouse_owner_id is None or existing.id != warehouse_owner_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Warehouse name '{name}' is already taken",
+                detail=f"El nombre del almacén '{name}' ya está en uso",
             )
 
     def _get_warehouse_or_404(self, warehouse_id: int) -> Warehouse:
@@ -34,7 +34,7 @@ class WarehouseService:
         if not warehouse:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Warehouse not found",
+                detail="Almacén no encontrado",
             )
         return warehouse
 

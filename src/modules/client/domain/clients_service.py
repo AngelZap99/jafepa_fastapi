@@ -26,7 +26,7 @@ class ClientService:
         if existing and (client_owner_id is None or existing.id != client_owner_id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Email {email} is already taken",
+                detail=f"El correo {email} ya está en uso",
             )
 
     def _get_client_or_404(self, client_id: int) -> Client:
@@ -34,7 +34,7 @@ class ClientService:
         if not client:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Client not found",
+                detail="Cliente no encontrado",
             )
         return client
 
