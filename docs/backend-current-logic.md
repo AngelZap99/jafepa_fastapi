@@ -129,6 +129,11 @@ erDiagram
 #### Product
 - Tiene `category_id` y `brand_id`.
 - `product.code` es unico.
+- `product.image` sigue siendo una URL publica consumible por frontend.
+- Las imagenes ya no dependen de S3:
+  - se guardan localmente en disco
+  - el backend las expone bajo una ruta publica tipo `/media/...`
+  - la URL guardada en base de datos apunta al mismo backend que recibio la subida
 
 Implicacion:
 - El catalogo quedo simplificado a una sola categoria por producto.
@@ -481,6 +486,7 @@ Compatibilidad:
 - `subcategory` fue eliminada del dominio.
 - `parent category` dejo de existir como concepto de negocio.
 - `category` quedo como unico nivel de clasificacion.
+- Las imagenes del proyecto se almacenan localmente y se sirven desde el backend, manteniendo `image` como URL publica.
 - Ventas `DRAFT` apartan inventario con `reserved_stock`.
 - `PAID` consume stock fisico y libera apartado.
 - Las facturas pueden crear productos inline mediante `new_product`.
@@ -520,3 +526,4 @@ Si el cambio modifica comportamiento, agregar ademas una nota breve al final con
 - 2026-04-17: las ventas `DRAFT` pasaron a apartar inventario mediante `reserved_stock` y movimientos `SALE_RESERVED` / `SALE_RELEASED`.
 - 2026-04-17: ventas ahora permiten precio `0.00` en `DRAFT`, agregan auditoria `paid_by` / `cancelled_by`, y soportan venta por pieza con apertura automatica de caja.
 - 2026-04-17: facturas ahora pueden crear productos inline mediante `new_product`.
+- 2026-04-20: el almacenamiento de imagenes se movio de S3 a disco local; el backend ahora las sirve desde una URL publica local bajo `/media/...` sin cambiar el contrato `image` para frontend.

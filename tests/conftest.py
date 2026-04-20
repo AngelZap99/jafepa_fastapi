@@ -1,4 +1,6 @@
 import os
+import shutil
+import tempfile
 
 os.environ.setdefault("TESTING", "1")
 
@@ -9,6 +11,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+TEST_MEDIA_ROOT = Path(tempfile.gettempdir()) / "jafepa-test-media"
+os.environ.setdefault("MEDIA_ROOT", str(TEST_MEDIA_ROOT))
 
 import pytest
 from fastapi.testclient import TestClient
@@ -40,7 +45,11 @@ def client(sqlite_engine, monkeypatch: pytest.MonkeyPatch):
             yield session
 
     monkeypatch.setenv("DB_DIALECT", "sqlite")
+    monkeypatch.setenv("MEDIA_ROOT", str(TEST_MEDIA_ROOT))
     monkeypatch.setattr(main_module, "engine", sqlite_engine, raising=True)
+
+    shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+    TEST_MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 
     main_module.app.dependency_overrides[get_session] = override_get_session
     try:

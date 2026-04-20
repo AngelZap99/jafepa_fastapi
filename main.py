@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import SQLModel, text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -21,6 +22,7 @@ from src.shared.exception_handlers import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
+from src.shared.files.local_file_storage import get_media_root, get_media_url_prefix
 
 
 def configure_logging() -> None:
@@ -76,6 +78,11 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
+app.mount(
+    get_media_url_prefix(),
+    StaticFiles(directory=str(get_media_root())),
+    name="media",
+)
 
 
 # =========================

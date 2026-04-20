@@ -7,19 +7,19 @@ from src.modules.product.product_schema import ProductCreate, ProductUpdate
 from src.modules.product.domain.product_repository import ProductRepository
 
 from src.shared.files.image_validator import ImageValidator
-from src.shared.files.upload_file_s3 import S3FileHandler
+from src.shared.files.local_file_storage import LocalFileHandler
 
 
 class ProductService:
     def __init__(self, repository: ProductRepository) -> None:
         self.repository = repository
         self.image_validator = ImageValidator()
-        self._s3: S3FileHandler | None = None
+        self._storage: LocalFileHandler | None = None
 
-    def _get_s3(self) -> S3FileHandler:
-        if self._s3 is None:
-            self._s3 = S3FileHandler()
-        return self._s3
+    def _get_storage(self) -> LocalFileHandler:
+        if self._storage is None:
+            self._storage = LocalFileHandler()
+        return self._storage
 
     def _get_product_or_404(self, product_id: int) -> Product:
         product = self.repository.get(product_id)
@@ -31,14 +31,14 @@ class ProductService:
         return product
 
     def _upload_one_product_image(
-        self, product_id: int, image: UploadFile
+        self, product_id: int, image: UploadFile, *, base_url: str | None = None
     ) -> tuple[str, str]:
         try:
             self.image_validator.validate(
                 [image],
                 max_size_bytes=5 * 1024 * 1024,
                 allowed_extensions={".jpg", ".jpeg", ".png", ".webp"},
-                allowed_mime_types={"image/jpeg", "image/png", ".webp"},
+                allowed_mime_types={"image/jpeg", "image/png", "image/webp"},
                 require_magic_bytes=True,
             )
         except (TypeError, ValueError) as exc:
@@ -46,10 +46,11 @@ class ProductService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
-        return self._get_s3().upload_uploadfile(
+        return self._get_storage().upload_uploadfile(
             image,
-            prefix=f"PRODUCT_IMAGES/{product_id}",
+            prefix=f"product-images/{product_id}",
             make_public=True,
+            base_url=base_url,
         )
 
     def list_products(self, skip: int = 0, limit: Optional[int] = None) -> List[Product]:
@@ -59,7 +60,11 @@ class ProductService:
         return self._get_product_or_404(product_id)
 
     def create_product(
-        self, payload: ProductCreate, image: Optional[UploadFile] = None
+        self,
+        payload: ProductCreate,
+        image: Optional[UploadFile] = None,
+        *,
+        base_url: str | None = None,
     ) -> Product:
         # Verificar conflictos
         conflicts = self.repository.check_conflicts(payload)
@@ -87,12 +92,14 @@ class ProductService:
         if image:
             key = None
             try:
-                key, url = self._upload_one_product_image(product.id, image)
+                key, url = self._upload_one_product_image(
+                    product.id, image, base_url=base_url
+                )
                 product.image = url
                 product = self.repository.update(product)
             except Exception:
                 if key:
-                    self._get_s3().delete_file(key)
+                    self._get_storage().delete_file(key)
                 raise
 
         return product
@@ -102,6 +109,8 @@ class ProductService:
         product_id: int,
         payload: ProductUpdate,
         image: Optional[UploadFile] = None,
+        *,
+        base_url: str | None = None,
     ) -> Product:
         product = self._get_product_or_404(product_id)
         data = payload.model_dump(exclude_unset=True)
@@ -125,16 +134,18 @@ class ProductService:
             old_image = product.image
             key = None
             try:
-                key, url = self._upload_one_product_image(product.id, image)
+                key, url = self._upload_one_product_image(
+                    product.id, image, base_url=base_url
+                )
                 product.image = url
                 product = self.repository.update(product)
             except Exception:
                 if key:
-                    self._get_s3().delete_file(key)
+                    self._get_storage().delete_file(key)
                 raise
 
             if old_image:
-                self._get_s3().delete_file(old_image)
+                self._get_storage().delete_file(old_image)
 
         return self.repository.update(product)
 

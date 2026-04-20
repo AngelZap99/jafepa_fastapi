@@ -7,6 +7,7 @@ import base64
 from html import escape
 
 from src.shared.enums.sale_enums import SaleLinePriceType
+from src.shared.files.local_file_storage import resolve_media_path
 
 
 SALE_TAX_PERCENT = Decimal("16")
@@ -50,6 +51,16 @@ class PDFGenerator:
 
         if not path_or_url:
             return placeholder_icon
+
+        local_media_path = resolve_media_path(path_or_url)
+        if local_media_path and local_media_path.exists():
+            ext = local_media_path.suffix.lower().lstrip(".")
+            with open(local_media_path, "rb") as f:
+                content = f.read()
+                encoded = base64.b64encode(content).decode("utf-8")
+                if ext == "svg":
+                    return f"data:image/svg+xml;base64,{encoded}"
+                return f"data:image/{ext};base64,{encoded}"
 
         # Si es URL
         if path_or_url.startswith("http://") or path_or_url.startswith("https://"):

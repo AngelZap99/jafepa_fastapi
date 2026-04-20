@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from typing import Optional
 from src.shared.database.dependencies import SessionDep
 
@@ -118,11 +118,16 @@ def create_inventory(
     status_code=status.HTTP_201_CREATED,
 )
 def create_inventory_with_product(
+    request: Request,
     payload: InventoryCreateWithProduct = Depends(InventoryCreateWithProduct.as_form),
     image_file: UploadFile | None = File(None),
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
-    return inventory_service.create_inventory_with_product(payload, image=image_file)
+    return inventory_service.create_inventory_with_product(
+        payload,
+        image=image_file,
+        base_url=str(request.base_url),
+    )
 
 
 @router.put(

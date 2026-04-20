@@ -16,6 +16,7 @@ from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.inventory_movement.inventory_movement_model import InventoryMovement
 from src.shared.models.product.product_model import Product
 from src.shared.models.warehouse.warehouse_model import Warehouse
+from src.shared.files.local_file_storage import resolve_media_path
 
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -324,16 +325,9 @@ def test_inventory_update_rejects_manual_cost_changes(auth_client, db_session):
 
 
 def test_inventory_create_with_product_is_transactional_and_returns_expanded_inventory(
-    auth_client, db_session, monkeypatch
+    auth_client, db_session
 ):
     data = _seed_inventory_catalog(db_session)
-
-    monkeypatch.setattr(
-        InventoryService,
-        "_upload_one_product_image",
-        lambda self, product_id, image: ("fake-key", f"https://example.com/{product_id}.png"),
-        raising=True,
-    )
 
     response = auth_client.post(
         "/api/inventory/create-with-product",
@@ -360,7 +354,9 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
     assert payload["product"]["code"] == "INV-CWP-001"
     assert payload["product"]["category"]["id"] == data["category"].id
     assert payload["product"]["brand"]["id"] == data["brand"].id
-    assert payload["product"]["image"] == f"https://example.com/{payload['product']['id']}.png"
+    assert payload["product"]["image"].startswith("http://testserver/media/product-images/")
+    image_path = resolve_media_path(payload["product"]["image"])
+    assert image_path is not None and image_path.exists()
 
     movements = (
         db_session.exec(

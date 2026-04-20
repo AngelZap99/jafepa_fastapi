@@ -1,3 +1,12 @@
+from decimal import Decimal
+from urllib.parse import urlparse
+
+from src.shared.files.local_file_storage import resolve_media_path
+
+
+PNG_BYTES = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+
 def test_brand_catalog_endpoints(auth_client, catalog_seed):
     listed = auth_client.get("/api/brands/list")
     assert listed.status_code == 200, listed.text
@@ -183,10 +192,14 @@ def test_product_catalog_endpoints(auth_client, catalog_seed, db_session):
             "category_id": str(category_id),
             "brand_id": str(brand_id),
         },
+        files={"image_file": ("product.png", PNG_BYTES, "image/png")},
     )
     assert created.status_code == 201, created.text
     product_id = created.json()["id"]
     assert created.json()["code"] == "SKU-1"
+    assert created.json()["image"].startswith("http://testserver/media/product-images/")
+    image_path = resolve_media_path(created.json()["image"])
+    assert image_path is not None and image_path.exists()
 
     duplicated = auth_client.post(
         "/api/products/create",
@@ -247,4 +260,27 @@ def test_product_catalog_endpoints(auth_client, catalog_seed, db_session):
     deleted = auth_client.delete(f"/api/products/delete/{product_id}")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["is_active"] is False
-from decimal import Decimal
+
+
+def test_product_image_url_is_served_locally(client, auth_headers, catalog_seed):
+    created = client.post(
+        "/api/products/create",
+        headers=auth_headers,
+        data={
+            "name": "Producto con imagen",
+            "code": "IMG-001",
+            "description": "Prueba de imagen",
+            "category_id": str(catalog_seed["category_id"]),
+            "brand_id": str(catalog_seed["brand_id"]),
+        },
+        files={"image_file": ("product.png", PNG_BYTES, "image/png")},
+    )
+    assert created.status_code == 201, created.text
+
+    image_url = created.json()["image"]
+    assert image_url.startswith("http://testserver/media/")
+
+    image_response = client.get(urlparse(image_url).path)
+    assert image_response.status_code == 200, image_response.text
+    assert image_response.headers["content-type"] == "image/png"
+    assert image_response.content.startswith(PNG_BYTES[:8])

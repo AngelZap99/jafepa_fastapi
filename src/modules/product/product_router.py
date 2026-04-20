@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException, Query
+from fastapi import APIRouter, Depends, status, File, UploadFile, HTTPException, Query, Request
 from sqlmodel import select
 
 from src.shared.database.dependencies import SessionDep
@@ -43,20 +43,31 @@ def list_products(
 
 @router.post("/create", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 def create_product(
+    request: Request,
     payload: ProductCreate = Depends(ProductCreate.as_form),
     image_file: UploadFile | None = File(None),
     service: ProductService = Depends(get_product_service),
 ):
-    return service.create_product(payload, image=image_file)
+    return service.create_product(
+        payload,
+        image=image_file,
+        base_url=str(request.base_url),
+    )
 
 @router.put("/update/{product_id}", response_model=ProductResponse)
 def update_product(
+    request: Request,
     product_id: int,
     payload: ProductUpdate = Depends(ProductUpdate.as_form),
     image_file: UploadFile | None = File(None),
     service: ProductService = Depends(get_product_service),
 ):
-    return service.update_product(product_id, payload, image=image_file)
+    return service.update_product(
+        product_id,
+        payload,
+        image=image_file,
+        base_url=str(request.base_url),
+    )
 
 @router.delete("/delete/{product_id}", response_model=ProductResponse)
 def delete_product(product_id: int, service: ProductService = Depends(get_product_service)):

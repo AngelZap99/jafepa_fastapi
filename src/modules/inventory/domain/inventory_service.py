@@ -28,7 +28,7 @@ from src.shared.enums.inventory_enums import (
 )
 from src.shared.files.image_validator import ImageValidator
 from src.shared.enums.sale_enums import SaleLineQuantityMode
-from src.shared.files.upload_file_s3 import S3FileHandler
+from src.shared.files.local_file_storage import LocalFileHandler
 from src.shared.models.brand.brand_model import Brand
 from src.shared.models.category.category_model import Category
 from src.shared.models.inventory.inventory_model import Inventory
@@ -52,12 +52,12 @@ class InventoryService:
         self.repository = repository
         self._pdf_generator = PDFGenerator()
         self._image_validator = ImageValidator()
-        self._s3: S3FileHandler | None = None
+        self._storage: LocalFileHandler | None = None
 
-    def _get_s3(self) -> S3FileHandler:
-        if self._s3 is None:
-            self._s3 = S3FileHandler()
-        return self._s3
+    def _get_storage(self) -> LocalFileHandler:
+        if self._storage is None:
+            self._storage = LocalFileHandler()
+        return self._storage
 
     def _get_inventory_or_404(self, inventory_id: int) -> Inventory:
         inventory = self.repository.get(inventory_id)
@@ -161,7 +161,7 @@ class InventoryService:
             )
 
     def _upload_one_product_image(
-        self, product_id: int, image: UploadFile
+        self, product_id: int, image: UploadFile, *, base_url: str | None = None
     ) -> tuple[str, str]:
         try:
             self._image_validator.validate(
@@ -176,10 +176,11 @@ class InventoryService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=str(exc),
             ) from exc
-        return self._get_s3().upload_uploadfile(
+        return self._get_storage().upload_uploadfile(
             image,
-            prefix=f"PRODUCT_IMAGES/{product_id}",
+            prefix=f"product-images/{product_id}",
             make_public=True,
+            base_url=base_url,
         )
 
     def _build_manual_movement(
@@ -463,6 +464,8 @@ class InventoryService:
         self,
         payload: InventoryCreateWithProduct,
         image: UploadFile | None = None,
+        *,
+        base_url: str | None = None,
     ) -> Inventory:
         session = self.repository.db
         product_repository = ProductRepository(session)
@@ -499,7 +502,9 @@ class InventoryService:
             session.flush()
 
             if image:
-                uploaded_key, image_url = self._upload_one_product_image(product.id, image)
+                uploaded_key, image_url = self._upload_one_product_image(
+                    product.id, image, base_url=base_url
+                )
                 product.image = image_url
                 product_repository.update(product, commit=False)
 
@@ -531,12 +536,12 @@ class InventoryService:
         except HTTPException:
             session.rollback()
             if uploaded_key:
-                self._get_s3().delete_file(uploaded_key)
+                self._get_storage().delete_file(uploaded_key)
             raise
         except IntegrityError as exc:
             session.rollback()
             if uploaded_key:
-                self._get_s3().delete_file(uploaded_key)
+                self._get_storage().delete_file(uploaded_key)
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="No se pudo crear el inventario del producto.",
@@ -544,7 +549,7 @@ class InventoryService:
         except Exception:
             session.rollback()
             if uploaded_key:
-                self._get_s3().delete_file(uploaded_key)
+                self._get_storage().delete_file(uploaded_key)
             raise
 
         if inventory is None:
