@@ -1,3 +1,7 @@
+from src.shared.auth.jwt_auth import decode_token
+from src.shared.config.env_config import env_settings
+
+
 def _create_user(auth_client, email: str, password: str):
     return auth_client.post(
         "/api/users/createUser",
@@ -65,7 +69,7 @@ def test_users_me_requires_token_and_returns_user(client, auth_client):
     assert me.json()["email"] == email
 
 
-def test_refresh_token_rotates_tokens(client, auth_client):
+def test_refresh_token_keeps_same_refresh_and_renews_access(client, auth_client):
     email = "refresh@example.com"
     password = "StrongPass1"
     created = _create_user(auth_client, email, password)
@@ -81,4 +85,29 @@ def test_refresh_token_rotates_tokens(client, auth_client):
 
     assert data["token_type"] == "bearer"
     assert data["access_token"] != login.json()["access_token"]
-    assert data["refresh_token"] != refresh_token
+    assert data["refresh_token"] == refresh_token
+
+
+def test_token_expiration_uses_minutes_for_access_and_hours_for_refresh(
+    client, auth_client
+):
+    email = "exp@example.com"
+    password = "StrongPass1"
+    created = _create_user(auth_client, email, password)
+    assert created.status_code == 201, created.text
+
+    login = _login(client, email, password)
+    assert login.status_code == 200, login.text
+
+    access_payload = decode_token(login.json()["access_token"])
+    refresh_payload = decode_token(login.json()["refresh_token"])
+
+    access_seconds = int(access_payload["exp"]) - int(access_payload["iat"])
+    refresh_seconds = int(refresh_payload["exp"]) - int(refresh_payload["iat"])
+
+    expected_access_seconds = env_settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    expected_refresh_seconds = env_settings.JWT_REFRESH_TOKEN_EXPIRE_HOURS * 60 * 60
+
+    assert abs(access_seconds - expected_access_seconds) <= 5
+    assert abs(refresh_seconds - expected_refresh_seconds) <= 5
+    assert refresh_seconds > access_seconds

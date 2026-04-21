@@ -7,14 +7,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _get_int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return int(value)
+
+
 class EnvSettings:
     """Application settings loaded from environment variables."""
 
     # JWT Configuration
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
     JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", str(8 * 60)))
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRE_DAYS", "1"))
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = _get_int_env(
+        "JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 8 * 60
+    )
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS_LEGACY: int = _get_int_env(
+        "JWT_REFRESH_TOKEN_EXPIRE_DAYS", 1
+    )
+    JWT_REFRESH_TOKEN_EXPIRE_HOURS: int = _get_int_env(
+        "JWT_REFRESH_TOKEN_EXPIRE_HOURS",
+        JWT_REFRESH_TOKEN_EXPIRE_DAYS_LEGACY * 24,
+    )
     JWT_ENCRYPTION_KEY: str = os.getenv("JWT_ENCRYPTION_KEY", "")
 
     @classmethod

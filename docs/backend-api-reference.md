@@ -14,6 +14,10 @@ Documento generado desde el backend actual para compartir con frontend. La inten
 - Los campos monetarios/decimales en respuestas suelen serializarse como `string` para preservar precisión.
 - En requests, los decimales normalmente pueden enviarse como número o string; los ejemplos usan el formato más legible posible.
 - Los campos `image` siguen siendo URLs públicas. Actualmente el backend sirve esas imágenes localmente bajo `/media/...` en el mismo host del API.
+- La vigencia de tokens se controla por entorno:
+  - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`
+  - `JWT_REFRESH_TOKEN_EXPIRE_HOURS`
+- `POST /api/auth/refresh` renueva el `access_token`, pero no rota el `refresh_token`.
 
 ### Contrato de Error
 

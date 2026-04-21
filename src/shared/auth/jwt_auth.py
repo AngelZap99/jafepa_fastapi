@@ -35,7 +35,7 @@ def create_access_token(subject: str) -> str:
 
 
 def create_refresh_token(subject: str) -> str:
-    expires = timedelta(days=env_settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    expires = timedelta(hours=env_settings.JWT_REFRESH_TOKEN_EXPIRE_HOURS)
     return _create_token({"sub": subject, "type": "refresh"}, expires)
 
 

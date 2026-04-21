@@ -33,6 +33,13 @@ Documento relacionado:
 - Esto aplica a catalogos, inventario, facturas, ventas, usuarios, clientes, almacenes y `bff`.
 - La proteccion vive a nivel router con `Depends(get_current_user)`.
 - Existe una prueba de arquitectura que falla si algun router de negocio pierde esa dependencia.
+- La vigencia de tokens se configura por entorno:
+  - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`
+  - `JWT_REFRESH_TOKEN_EXPIRE_HOURS`
+- Compatibilidad legacy:
+  - si `JWT_REFRESH_TOKEN_EXPIRE_HOURS` no existe, el backend deriva horas desde `JWT_REFRESH_TOKEN_EXPIRE_DAYS`.
+- `POST /api/auth/refresh` genera un access token nuevo, pero conserva el mismo refresh token.
+- La sesion solo puede mantenerse viva hasta que expire ese refresh original o se pierda el token.
 
 ## Alcance
 

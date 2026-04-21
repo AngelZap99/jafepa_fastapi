@@ -99,12 +99,11 @@ class AuthService:
                 detail="El usuario no existe o está inactivo",
             )
 
-        # Emitimos nuevos tokens
+        # Emitimos un nuevo access token, pero mantenemos el mismo refresh token.
         subject = str(user.id)
         new_access = create_access_token(subject)
-        new_refresh = create_refresh_token(subject)
 
         return TokenPairResponse(
             access_token=new_access,
-            refresh_token=new_refresh,
+            refresh_token=refresh_token,
         )
