@@ -502,10 +502,10 @@ class InventoryService:
             session.flush()
 
             if image:
-                uploaded_key, image_url = self._upload_one_product_image(
+                uploaded_key, _image_url = self._upload_one_product_image(
                     product.id, image, base_url=base_url
                 )
-                product.image = image_url
+                product.image = uploaded_key
                 product_repository.update(product, commit=False)
 
             self._ensure_inventory_unique(

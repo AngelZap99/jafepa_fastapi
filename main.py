@@ -22,7 +22,12 @@ from src.shared.exception_handlers import (
     unhandled_exception_handler,
     validation_exception_handler,
 )
-from src.shared.files.local_file_storage import get_media_root, get_media_url_prefix
+from src.shared.files.local_file_storage import (
+    get_media_root,
+    get_media_url_prefixes,
+    reset_current_request_base_url,
+    set_current_request_base_url,
+)
 
 
 def configure_logging() -> None:
@@ -78,11 +83,21 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
-app.mount(
-    get_media_url_prefix(),
-    StaticFiles(directory=str(get_media_root())),
-    name="media",
-)
+for media_prefix in get_media_url_prefixes():
+    app.mount(
+        media_prefix,
+        StaticFiles(directory=str(get_media_root())),
+        name=f"media-{media_prefix.strip('/').replace('/', '-') or 'root'}",
+    )
+
+
+@app.middleware("http")
+async def bind_request_base_url(request, call_next):
+    token = set_current_request_base_url(str(request.base_url))
+    try:
+        return await call_next(request)
+    finally:
+        reset_current_request_base_url(token)
 
 
 # =========================

@@ -197,7 +197,9 @@ def test_product_catalog_endpoints(auth_client, catalog_seed, db_session):
     assert created.status_code == 201, created.text
     product_id = created.json()["id"]
     assert created.json()["code"] == "SKU-1"
-    assert created.json()["image"].startswith("http://testserver/media/product-images/")
+    assert created.json()["image"].startswith(
+        "http://testserver/api/media/product-images/"
+    )
     image_path = resolve_media_path(created.json()["image"])
     assert image_path is not None and image_path.exists()
 
@@ -278,9 +280,44 @@ def test_product_image_url_is_served_locally(client, auth_headers, catalog_seed)
     assert created.status_code == 201, created.text
 
     image_url = created.json()["image"]
-    assert image_url.startswith("http://testserver/media/")
+    assert image_url.startswith("http://testserver/api/media/")
 
     image_response = client.get(urlparse(image_url).path)
     assert image_response.status_code == 200, image_response.text
     assert image_response.headers["content-type"] == "image/png"
     assert image_response.content.startswith(PNG_BYTES[:8])
+
+
+def test_product_image_url_is_rebuilt_for_current_request_host(
+    client, auth_headers, catalog_seed, db_session
+):
+    created = client.post(
+        "/api/products/create",
+        headers=auth_headers,
+        data={
+            "name": "Producto con host legacy",
+            "code": "IMG-LEGACY",
+            "description": "Prueba de normalizacion",
+            "category_id": str(catalog_seed["category_id"]),
+            "brand_id": str(catalog_seed["brand_id"]),
+        },
+        files={"image_file": ("product.png", PNG_BYTES, "image/png")},
+    )
+    assert created.status_code == 201, created.text
+
+    payload = created.json()
+    product_id = payload["id"]
+    legacy_path = urlparse(payload["image"]).path
+
+    from src.shared.models.product.product_model import Product
+
+    product = db_session.get(Product, product_id)
+    product.image = f"http://localhost:8000{legacy_path}"
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+
+    fetched = client.get(f"/api/products/{product_id}", headers=auth_headers)
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["image"].startswith("http://testserver/api/media/")
+    assert "localhost:8000" not in fetched.json()["image"]

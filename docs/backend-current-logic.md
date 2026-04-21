@@ -139,8 +139,21 @@ erDiagram
 - `product.image` sigue siendo una URL publica consumible por frontend.
 - Las imagenes ya no dependen de S3:
   - se guardan localmente en disco
-  - el backend las expone bajo una ruta publica tipo `/media/...`
-  - la URL guardada en base de datos apunta al mismo backend que recibio la subida
+  - el backend las expone bajo una ruta publica tipo `/api/media/...`
+  - en base de datos se guarda una referencia estable al archivo local
+  - en las respuestas del API esa referencia se serializa como URL publica consumible por frontend
+  - si existen URLs viejas de media con host incorrecto, el backend las reconstruye con el host actual del request o con `MEDIA_PUBLIC_BASE_URL`
+
+Configuracion recomendada para produccion:
+- `MEDIA_ROOT=storage/media`
+- `MEDIA_URL_PREFIX=/api/media`
+- `MEDIA_PUBLIC_BASE_URL=https://tu-dominio-backend`
+
+Notas de despliegue en Docker:
+- FastAPI monta la ruta publica de media en `main.py`.
+- En `docker-compose.yml` el directorio `/app/storage/media` queda en un volumen dedicado `media_data`.
+- Esto evita perder imagenes al recrear el contenedor.
+- Si existe un proxy inverso delante del contenedor, debe reenviar tambien `/api/media/*` hacia la API.
 
 Implicacion:
 - El catalogo quedo simplificado a una sola categoria por producto.
@@ -533,4 +546,4 @@ Si el cambio modifica comportamiento, agregar ademas una nota breve al final con
 - 2026-04-17: las ventas `DRAFT` pasaron a apartar inventario mediante `reserved_stock` y movimientos `SALE_RESERVED` / `SALE_RELEASED`.
 - 2026-04-17: ventas ahora permiten precio `0.00` en `DRAFT`, agregan auditoria `paid_by` / `cancelled_by`, y soportan venta por pieza con apertura automatica de caja.
 - 2026-04-17: facturas ahora pueden crear productos inline mediante `new_product`.
-- 2026-04-20: el almacenamiento de imagenes se movio de S3 a disco local; el backend ahora las sirve desde una URL publica local bajo `/media/...` sin cambiar el contrato `image` para frontend.
+- 2026-04-20: el almacenamiento de imagenes se movio de S3 a disco local; el backend ahora las sirve desde una URL publica local bajo `/api/media/...` sin cambiar el contrato `image` para frontend.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any, BinaryIO, Sequence
 from urllib.parse import urlparse
@@ -10,6 +11,11 @@ from dotenv import load_dotenv
 from fastapi import UploadFile
 
 load_dotenv()
+
+_current_request_base_url: ContextVar[str | None] = ContextVar(
+    "current_request_base_url",
+    default=None,
+)
 
 
 def get_media_root() -> Path:
@@ -21,11 +27,44 @@ def get_media_root() -> Path:
     return path.resolve()
 
 
+def get_media_public_base_url() -> str | None:
+    value = os.getenv("MEDIA_PUBLIC_BASE_URL") or os.getenv("PUBLIC_BASE_URL")
+    if not value:
+        return None
+    return value.rstrip("/")
+
+
+def set_current_request_base_url(value: str | None) -> Token[str | None]:
+    normalized = value.rstrip("/") if value else None
+    return _current_request_base_url.set(normalized)
+
+
+def reset_current_request_base_url(token: Token[str | None]) -> None:
+    _current_request_base_url.reset(token)
+
+
+def get_current_request_base_url() -> str | None:
+    return _current_request_base_url.get()
+
+
 def get_media_url_prefix() -> str:
-    prefix = (os.getenv("MEDIA_URL_PREFIX") or "/media").strip()
+    prefix = (os.getenv("MEDIA_URL_PREFIX") or "/api/media").strip()
     if not prefix.startswith("/"):
         prefix = f"/{prefix}"
-    return prefix.rstrip("/") or "/media"
+    return prefix.rstrip("/") or "/api/media"
+
+
+def get_media_url_prefixes() -> list[str]:
+    prefixes = [get_media_url_prefix(), "/media", "/api/media"]
+    out: list[str] = []
+    for prefix in prefixes:
+        normalized = prefix.strip()
+        if not normalized.startswith("/"):
+            normalized = f"/{normalized}"
+        normalized = normalized.rstrip("/") or "/"
+        if normalized not in out:
+            out.append(normalized)
+    return out
 
 
 def resolve_media_path(file_path_or_url: str | None) -> Path | None:
@@ -37,17 +76,25 @@ def resolve_media_path(file_path_or_url: str | None) -> Path | None:
         return None
 
     media_root = get_media_root()
-    media_prefix = get_media_url_prefix()
+    media_prefixes = get_media_url_prefixes()
 
     if value.startswith(("http://", "https://")):
         parsed = urlparse(value)
-        if not parsed.path.startswith(f"{media_prefix}/"):
+        relative_key = None
+        for media_prefix in media_prefixes:
+            if parsed.path.startswith(f"{media_prefix}/"):
+                relative_key = parsed.path[len(media_prefix) :].lstrip("/")
+                break
+        if relative_key is None:
             return None
-        relative_key = parsed.path[len(media_prefix) :].lstrip("/")
-    elif value.startswith(f"{media_prefix}/"):
-        relative_key = value[len(media_prefix) :].lstrip("/")
     elif value.startswith("/"):
-        return None
+        relative_key = None
+        for media_prefix in media_prefixes:
+            if value.startswith(f"{media_prefix}/"):
+                relative_key = value[len(media_prefix) :].lstrip("/")
+                break
+        if relative_key is None:
+            return None
     else:
         relative_key = value.lstrip("/")
 
@@ -60,6 +107,39 @@ def resolve_media_path(file_path_or_url: str | None) -> Path | None:
     except ValueError:
         return None
     return candidate
+
+
+def normalize_media_reference(file_path_or_url: str | None) -> str | None:
+    if not file_path_or_url:
+        return None
+
+    value = str(file_path_or_url).strip()
+    if not value:
+        return None
+
+    path = resolve_media_path(value)
+    if path is None:
+        return value
+
+    return str(path.relative_to(get_media_root())).replace(os.sep, "/")
+
+
+def build_public_media_url(
+    file_path_or_url: str | None,
+    *,
+    base_url: str | None = None,
+) -> str | None:
+    normalized = normalize_media_reference(file_path_or_url)
+    if not normalized:
+        return None
+
+    parsed = urlparse(normalized)
+    if parsed.scheme and parsed.netloc:
+        return normalized
+
+    effective_base_url = base_url or get_current_request_base_url()
+    handler = LocalFileHandler(public_base_url=effective_base_url)
+    return handler._build_public_url(normalized, base_url=effective_base_url)
 
 
 class LocalFileHandler:
@@ -75,7 +155,9 @@ class LocalFileHandler:
         self.media_root.mkdir(parents=True, exist_ok=True)
         self.media_url_prefix = media_url_prefix or get_media_url_prefix()
         self.public_base_url = (
-            public_base_url.rstrip("/") if public_base_url else None
+            public_base_url.rstrip("/")
+            if public_base_url
+            else get_media_public_base_url()
         )
 
     def _safe_key(self, prefix: str, filename: str | None = None) -> str:
@@ -93,10 +175,10 @@ class LocalFileHandler:
         prefix = self.media_url_prefix.rstrip("/")
         cleaned_key = key.lstrip("/")
 
-        if base_url:
-            return f"{base_url.rstrip('/')}{prefix}/{cleaned_key}"
         if self.public_base_url:
             return f"{self.public_base_url}{prefix}/{cleaned_key}"
+        if base_url:
+            return f"{base_url.rstrip('/')}{prefix}/{cleaned_key}"
         return f"{prefix}/{cleaned_key}"
 
     def _normalize_key(self, file_path_or_url: str) -> str:

@@ -354,7 +354,9 @@ def test_inventory_create_with_product_is_transactional_and_returns_expanded_inv
     assert payload["product"]["code"] == "INV-CWP-001"
     assert payload["product"]["category"]["id"] == data["category"].id
     assert payload["product"]["brand"]["id"] == data["brand"].id
-    assert payload["product"]["image"].startswith("http://testserver/media/product-images/")
+    assert payload["product"]["image"].startswith(
+        "http://testserver/api/media/product-images/"
+    )
     image_path = resolve_media_path(payload["product"]["image"])
     assert image_path is not None and image_path.exists()
 

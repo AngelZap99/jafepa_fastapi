@@ -13,7 +13,13 @@ Documento generado desde el backend actual para compartir con frontend. La inten
 - Los `datetime` salen en UTC con offset explícito, por ejemplo `2026-04-17T12:00:00+00:00`.
 - Los campos monetarios/decimales en respuestas suelen serializarse como `string` para preservar precisión.
 - En requests, los decimales normalmente pueden enviarse como número o string; los ejemplos usan el formato más legible posible.
-- Los campos `image` siguen siendo URLs públicas. Actualmente el backend sirve esas imágenes localmente bajo `/media/...` en el mismo host del API.
+- Los campos `image` siguen siendo URLs públicas. Actualmente el backend sirve esas imágenes localmente bajo `/api/media/...` en el mismo host del API.
+- Internamente el backend puede guardar una referencia local estable del archivo; aun asi, el campo `image` siempre se responde como URL publica lista para frontend.
+- En despliegues Docker/productivos se recomienda configurar:
+  - `MEDIA_ROOT=storage/media`
+  - `MEDIA_URL_PREFIX=/api/media`
+  - `MEDIA_PUBLIC_BASE_URL=https://tu-dominio-backend`
+- Si existe un proxy delante de la API, tambien debe exponer `/api/media/*` hacia el mismo contenedor.
 - La vigencia de tokens se controla por entorno:
   - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`
   - `JWT_REFRESH_TOKEN_EXPIRE_HOURS`

@@ -2,8 +2,9 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import Form
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
+from src.shared.files.local_file_storage import build_public_media_url
 from src.shared.schemas.datetime_types import UTCDateTime
 
 
@@ -22,7 +23,8 @@ class ProductBase(BaseModel):
     category_id: int
     brand_id: int
 
-    # This stays as URL in DB/response. The file upload will be handled in router/service.
+    # Puede ser URL externa o referencia interna de media. La respuesta publica
+    # siempre se serializa como URL consumible por frontend.
     image: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("code", mode="before")
@@ -138,6 +140,10 @@ class ProductResponse(ProductBase):
     brand: Optional[BrandResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("image", when_used="json")
+    def serialize_image(self, value: Optional[str]) -> Optional[str]:
+        return build_public_media_url(value)
 
 
 class InventoryStockItem(BaseModel):

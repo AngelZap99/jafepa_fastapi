@@ -92,10 +92,10 @@ class ProductService:
         if image:
             key = None
             try:
-                key, url = self._upload_one_product_image(
+                key, _url = self._upload_one_product_image(
                     product.id, image, base_url=base_url
                 )
-                product.image = url
+                product.image = key
                 product = self.repository.update(product)
             except Exception:
                 if key:
@@ -134,10 +134,10 @@ class ProductService:
             old_image = product.image
             key = None
             try:
-                key, url = self._upload_one_product_image(
+                key, _url = self._upload_one_product_image(
                     product.id, image, base_url=base_url
                 )
-                product.image = url
+                product.image = key
                 product = self.repository.update(product)
             except Exception:
                 if key:
