@@ -398,6 +398,48 @@ def test_draft_sale_line_update_refreshes_quantity_price_and_sale_total(
     assert Decimal(str(sale_payload["lines"][0]["total_price"])) == Decimal("28.00")
 
 
+def test_sale_rejects_mixing_unit_and_box_lines_for_same_product(auth_client, db_session):
+    inventory, client_obj = _seed_inventory_and_client(
+        db_session,
+        stock=40,
+        box_size=12,
+    )
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_units": 5,
+                    "price": "4.00",
+                    "price_type": "UNIT",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale_id = created.json()["id"]
+
+    added = auth_client.post(
+        f"/api/sales/{sale_id}/lines",
+        json={
+            "inventory_id": inventory.id,
+            "quantity_boxes": 1,
+            "price": "48.00",
+            "price_type": "BOX",
+        },
+    )
+    assert added.status_code == 409, added.text
+    assert (
+        added.json()["message"]
+        == "No se puede mezclar venta por cajas y por unidades para el mismo producto en la misma venta."
+    )
+
+
 def test_full_update_sale_replaces_lines_and_transitions_status_in_one_request(
     auth_client, db_session
 ):

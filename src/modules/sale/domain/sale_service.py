@@ -347,6 +347,14 @@ class SaleService:
             return ("UNIT", inventory.warehouse_id, inventory.product_id)
         return (line.inventory_id, None, None)
 
+    def _same_product_scope(self, inventory: Inventory, other_inventory: Inventory | None) -> bool:
+        if other_inventory is None:
+            return False
+        return (
+            int(inventory.warehouse_id) == int(other_inventory.warehouse_id)
+            and int(inventory.product_id) == int(other_inventory.product_id)
+        )
+
     def _ensure_no_duplicate_effective_inventory(
         self,
         sale: Sale,
@@ -364,6 +372,31 @@ class SaleService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="No se permite repetir el mismo inventario efectivo en las líneas de venta.",
                 )
+
+    def _ensure_no_mixed_quantity_modes(
+        self,
+        sale: Sale,
+        *,
+        inventory: Inventory,
+        quantity_mode: SaleLineQuantityMode,
+        current_line_id: int | None = None,
+    ) -> None:
+        for existing in sale.lines:
+            if not existing.is_active:
+                continue
+            if current_line_id is not None and existing.id == current_line_id:
+                continue
+
+            existing_inventory = existing.inventory
+            if not self._same_product_scope(inventory, existing_inventory):
+                continue
+            if existing.quantity_mode == quantity_mode:
+                continue
+
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No se puede mezclar venta por cajas y por unidades para el mismo producto en la misma venta.",
+            )
 
     def _apply_line_snapshot(
         self,
@@ -1092,6 +1125,7 @@ class SaleService:
             def mutate() -> None:
                 seen_line_ids: set[int] = set()
                 seen_inventory_keys: set[tuple[int | str, int | None, int | None]] = set()
+                seen_product_modes: dict[tuple[int, int], SaleLineQuantityMode] = {}
 
                 sale.client_id = payload.client_id
                 sale.notes = payload.notes
@@ -1116,6 +1150,14 @@ class SaleService:
                             detail="No se permite repetir el mismo inventario efectivo en las líneas de venta.",
                         )
                     seen_inventory_keys.add(effective_key)
+                    product_scope_key = (int(inventory.warehouse_id), int(inventory.product_id))
+                    existing_mode = seen_product_modes.get(product_scope_key)
+                    if existing_mode is not None and existing_mode != quantity_mode:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="No se puede mezclar venta por cajas y por unidades para el mismo producto en la misma venta.",
+                        )
+                    seen_product_modes[product_scope_key] = quantity_mode
 
                     effective_price = self._money(payload_line.price)
                     if payload_line.id is not None:
@@ -1269,6 +1311,11 @@ class SaleService:
             )
             key = self._preview_effective_inventory_key(inventory, quantity_mode)
             self._ensure_no_duplicate_effective_inventory(sale, key)
+            self._ensure_no_mixed_quantity_modes(
+                sale,
+                inventory=inventory,
+                quantity_mode=quantity_mode,
+            )
 
             def mutate() -> SaleLine:
                 nonlocal created_line
@@ -1347,6 +1394,12 @@ class SaleService:
             self._ensure_no_duplicate_effective_inventory(
                 sale,
                 key,
+                current_line_id=line.id,
+            )
+            self._ensure_no_mixed_quantity_modes(
+                sale,
+                inventory=preview_inventory,
+                quantity_mode=quantity_mode,
                 current_line_id=line.id,
             )
 
