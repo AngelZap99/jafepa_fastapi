@@ -112,6 +112,95 @@ def test_invoice_update_accepts_general_expenses_field(auth_client, catalog_seed
     assert Decimal(str(data["total"])) == Decimal("0.00")
 
 
+def test_cancelled_invoice_cannot_be_edited_until_reactivated(
+    auth_client, db_session, catalog_seed
+):
+    from src.shared.models.category.category_model import Category
+    from src.shared.models.brand.brand_model import Brand
+
+    category = db_session.get(Category, catalog_seed["category_id"])
+    brand = db_session.get(Brand, catalog_seed["brand_id"])
+    assert category is not None
+    assert brand is not None
+
+    product = Product(
+        name="Producto bloqueo cancelado",
+        code="INV-CANCELLED-ITEM",
+        description=None,
+        category_id=category.id,
+        brand_id=brand.id,
+        image=None,
+    )
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+
+    created = auth_client.post(
+        "/api/invoices/create",
+        json={
+            "invoice_number": "INV-CANCELLED-LOCK",
+            "sequence": 1,
+            "status": "DRAFT",
+            "warehouse_id": catalog_seed["warehouse_id"],
+            "lines": [
+                {
+                    "product_id": product.id,
+                    "box_size": 6,
+                    "quantity_boxes": 2,
+                    "price": "20.00",
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    invoice = created.json()
+    invoice_id = invoice["id"]
+    line_id = invoice["lines"][0]["id"]
+
+    cancelled = auth_client.put(
+        f"/api/invoices/update-status/{invoice_id}",
+        json={"status": "CANCELLED"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "CANCELLED"
+
+    updated_invoice = auth_client.put(
+        f"/api/invoices/update/{invoice_id}",
+        json={"notes": "no debería permitir editar"},
+    )
+    assert updated_invoice.status_code == 409, updated_invoice.text
+    assert (
+        updated_invoice.json()["message"]
+        == "No se puede editar una factura CANCELLED. Primero regresa el estado a DRAFT."
+    )
+
+    updated_line = auth_client.put(
+        f"/api/invoice-lines/update/{invoice_id}/{line_id}",
+        json={"quantity_boxes": 3},
+    )
+    assert updated_line.status_code == 409, updated_line.text
+    assert (
+        updated_line.json()["message"]
+        == "No se puede editar una factura CANCELLED. Primero regresa el estado a DRAFT."
+    )
+
+    reactivated = auth_client.put(
+        f"/api/invoices/update-status/{invoice_id}",
+        json={"status": "DRAFT"},
+    )
+    assert reactivated.status_code == 200, reactivated.text
+    assert reactivated.json()["status"] == "DRAFT"
+
+    updated_after_reactivate = auth_client.put(
+        f"/api/invoices/update/{invoice_id}",
+        json={"notes": "ya editable"},
+    )
+    assert updated_after_reactivate.status_code == 200, updated_after_reactivate.text
+    assert updated_after_reactivate.json()["notes"] == "ya editable"
+
+
 def test_arrived_invoice_registers_cost_movements(auth_client, db_session, catalog_seed):
     from src.shared.models.category.category_model import Category
     from src.shared.models.brand.brand_model import Brand

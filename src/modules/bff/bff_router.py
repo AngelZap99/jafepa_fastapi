@@ -38,6 +38,10 @@ def _count(session: SessionDep, model, *filters) -> int:
     if filters:
         stmt = stmt.where(*filters)
     result = session.exec(stmt).one()
+    if hasattr(result, "_mapping"):
+        result = next(iter(result._mapping.values()), 0)
+    elif isinstance(result, (tuple, list)):
+        result = result[0] if result else 0
     return int(result or 0)
 
 

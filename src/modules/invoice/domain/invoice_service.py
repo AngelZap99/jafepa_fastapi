@@ -62,6 +62,19 @@ class InvoiceService:
     def __init__(self, repository: InvoiceRepository) -> None:
         self.repository = repository
 
+    @staticmethod
+    def _ensure_invoice_editable(invoice: Invoice) -> None:
+        if invoice.status == InvoiceStatus.ARRIVED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No se puede editar una factura ARRIVED. Primero regresa el estado.",
+            )
+        if invoice.status == InvoiceStatus.CANCELLED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="No se puede editar una factura CANCELLED. Primero regresa el estado a DRAFT.",
+            )
+
     def _raise_duplicate_line_conflict(self) -> None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -507,11 +520,7 @@ class InvoiceService:
 
     def update_invoice(self, invoice_id: int, payload: InvoiceUpdate) -> Invoice:
         invoice = self._get_invoice_or_404(invoice_id)
-        if invoice.status == InvoiceStatus.ARRIVED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No se puede editar una factura ARRIVED. Primero regresa el estado.",
-            )
+        self._ensure_invoice_editable(invoice)
         data = payload.model_dump(exclude_unset=True)
         if "general_expenses" in data:
             data["logistic_tax"] = data.pop("general_expenses")
@@ -609,11 +618,7 @@ class InvoiceService:
         self, invoice_id: int, payload: InvoiceLineCreate
     ) -> InvoiceLine:
         invoice = self._get_locked_invoice_or_404(invoice_id)
-        if invoice.status == InvoiceStatus.ARRIVED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
-            )
+        self._ensure_invoice_editable(invoice)
         product_id = self._resolve_invoice_line_product_id(payload)
         self._ensure_invoice_line_unique(invoice, product_id=product_id, box_size=payload.box_size)
 
@@ -651,11 +656,7 @@ class InvoiceService:
     ) -> InvoiceLine:
         invoice = self._get_locked_invoice_or_404(invoice_id)
         line = self._get_line_or_404(invoice_id, line_id)
-        if invoice.status == InvoiceStatus.ARRIVED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
-            )
+        self._ensure_invoice_editable(invoice)
         data = payload.model_dump(exclude_unset=True)
         next_product_id = data.get("product_id", line.product_id)
         next_box_size = data.get("box_size", line.box_size)
@@ -697,9 +698,5 @@ class InvoiceService:
     def delete_invoice_line(self, invoice_id: int, line_id: int) -> InvoiceLine:
         invoice = self._get_locked_invoice_or_404(invoice_id)
         line = self._get_line_or_404(invoice_id, line_id)
-        if invoice.status == InvoiceStatus.ARRIVED:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No se pueden modificar líneas de una factura ARRIVED. Primero regresa el estado.",
-            )
+        self._ensure_invoice_editable(invoice)
         return self.repository.soft_delete_line(line)

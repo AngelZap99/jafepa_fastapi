@@ -15,6 +15,7 @@ from src.modules.inventory.domain.pdf_generator import PDFGenerator
 from src.modules.sale.domain.sale_repository import SaleRepository
 from src.modules.sale.sale_schema import (
     SaleCreateWithLines,
+    SaleFullUpdate,
     SaleLineCreate,
     SaleLineUpdate,
     SaleReportFilters,
@@ -590,7 +591,12 @@ class SaleService:
         for line in sale.lines:
             if not line.is_active:
                 continue
-            if line.price <= Decimal("0.00"):
+            effective_price = (
+                line.unit_price
+                if line.price_type == SaleLinePriceType.UNIT
+                else line.price
+            )
+            if effective_price <= Decimal("0.00"):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="No se puede marcar la venta como pagada con líneas de precio cero.",
@@ -844,13 +850,34 @@ class SaleService:
             self._apply_sale_release(sale)
 
         mutator()
-        self._recalculate_sale_total(sale)
 
         if sale.status == SaleStatus.PAID:
             self._ensure_sale_can_be_paid(sale)
             self._apply_sale_paid(sale)
         elif sale.status == SaleStatus.DRAFT:
             self._apply_sale_reserved(sale)
+
+        self._recalculate_sale_total(sale)
+
+    def _ensure_allowed_status_transition(
+        self,
+        *,
+        previous_status: SaleStatus,
+        new_status: SaleStatus,
+    ) -> None:
+        if previous_status == new_status:
+            return
+
+        allowed_transitions = {
+            SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
+            SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
+            SaleStatus.CANCELLED: {SaleStatus.DRAFT},
+        }
+        if new_status not in allowed_transitions.get(previous_status, set()):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La transición de estado no es válida.",
+            )
 
     def list_sales(self, skip: int = 0, limit: int | None = None):
         return [self._attach_sale_audit(sale) for sale in self.repository.list(skip=skip, limit=limit)]
@@ -979,16 +1006,10 @@ class SaleService:
                 session.commit()
                 return self._attach_sale_audit(sale)
 
-            allowed_transitions = {
-                SaleStatus.DRAFT: {SaleStatus.PAID, SaleStatus.CANCELLED},
-                SaleStatus.PAID: {SaleStatus.DRAFT, SaleStatus.CANCELLED},
-                SaleStatus.CANCELLED: {SaleStatus.DRAFT},
-            }
-            if new_status not in allowed_transitions.get(previous_status, set()):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="La transición de estado no es válida.",
-                )
+            self._ensure_allowed_status_transition(
+                previous_status=previous_status,
+                new_status=new_status,
+            )
 
             if new_status == SaleStatus.PAID:
                 self._ensure_sale_can_be_paid(sale)
@@ -1045,6 +1066,164 @@ class SaleService:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error de base de datos al actualizar el estado de la venta.",
+            )
+        except Exception:
+            session.rollback()
+            raise
+
+        return self._attach_sale_audit(self._get_sale_or_404(sale_id))
+
+    def full_update_sale(
+        self, sale_id: int, payload: SaleFullUpdate, current_user=None
+    ) -> Sale:
+        session = self.repository.db
+
+        try:
+            sale = self._get_locked_sale_or_404(sale_id)
+            previous_status = sale.status
+            target_status = payload.status
+            self._ensure_allowed_status_transition(
+                previous_status=previous_status,
+                new_status=target_status,
+            )
+
+            existing_lines = {line.id: line for line in sale.lines if line.is_active}
+
+            def mutate() -> None:
+                seen_line_ids: set[int] = set()
+                seen_inventory_keys: set[tuple[int | str, int | None, int | None]] = set()
+
+                sale.client_id = payload.client_id
+                sale.notes = payload.notes
+                if payload.sale_date is not None:
+                    sale.sale_date = payload.sale_date
+
+                for payload_line in payload.lines:
+                    inventory = self._get_inventory_or_404(payload_line.inventory_id)
+                    quantity, quantity_mode = self._effective_request_quantity_and_mode(
+                        inventory=inventory,
+                        price_type=payload_line.price_type,
+                        quantity_boxes=payload_line.quantity_boxes,
+                        quantity_units=payload_line.quantity_units,
+                    )
+                    effective_key = self._preview_effective_inventory_key(
+                        inventory,
+                        quantity_mode,
+                    )
+                    if effective_key in seen_inventory_keys:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="No se permite repetir el mismo inventario efectivo en las líneas de venta.",
+                        )
+                    seen_inventory_keys.add(effective_key)
+
+                    effective_price = self._money(payload_line.price)
+                    if payload_line.id is not None:
+                        line = existing_lines.get(payload_line.id)
+                        if line is None:
+                            raise HTTPException(
+                                status_code=status.HTTP_404_NOT_FOUND,
+                                detail="Línea de venta no encontrada.",
+                            )
+                        if payload_line.id in seen_line_ids:
+                            raise HTTPException(
+                                status_code=status.HTTP_409_CONFLICT,
+                                detail="No se permite repetir la misma línea de venta en la actualización.",
+                            )
+                        seen_line_ids.add(payload_line.id)
+
+                        line.inventory_id = inventory.id
+                        line.quantity_units = quantity
+                        line.box_size = inventory.box_size
+                        line.price_type = payload_line.price_type
+                        line.quantity_mode = quantity_mode
+                        line.price = effective_price
+                        line.unit_price = (
+                            effective_price
+                            if payload_line.price_type == SaleLinePriceType.UNIT
+                            else Decimal("0.00")
+                        )
+                        line.box_price = Decimal("0.00")
+                        line.total_price = Decimal("0.00")
+                        line.product_code = inventory.product.code if inventory.product else None
+                        line.product_name = inventory.product.name if inventory.product else None
+                        line.is_active = True
+                        self.repository.update_line(line, commit=False)
+                        continue
+
+                    self.repository.add_line(
+                        sale,
+                        SaleLine(
+                            inventory_id=inventory.id,
+                            quantity_units=quantity,
+                            box_size=inventory.box_size,
+                            price=effective_price,
+                            price_type=payload_line.price_type,
+                            quantity_mode=quantity_mode,
+                            unit_price=(
+                                effective_price
+                                if payload_line.price_type == SaleLinePriceType.UNIT
+                                else Decimal("0.00")
+                            ),
+                            box_price=Decimal("0.00"),
+                            total_price=Decimal("0.00"),
+                            product_code=inventory.product.code if inventory.product else None,
+                            product_name=inventory.product.name if inventory.product else None,
+                        ),
+                        commit=False,
+                    )
+
+                for line_id, existing_line in existing_lines.items():
+                    if line_id in seen_line_ids:
+                        continue
+                    self.repository.soft_delete_line(existing_line, commit=False)
+
+                sale.status = target_status
+                if current_user is not None:
+                    sale.updated_by = getattr(current_user, "id", None)
+                if previous_status != target_status:
+                    if target_status == SaleStatus.PAID:
+                        sale.paid_by = getattr(current_user, "id", None)
+                        sale.paid_at = utcnow()
+                    elif target_status == SaleStatus.CANCELLED:
+                        sale.cancelled_by = getattr(current_user, "id", None)
+                        sale.cancelled_at = utcnow()
+
+            self._apply_sale_state_delta(sale, mutate)
+            self.repository.update(sale, commit=False)
+            session.commit()
+        except IntegrityError as e:
+            session.rollback()
+            state = _sqlstate(e)
+            if state in {"22P02", "23514"} and "PAID" in str(getattr(e, "orig", e)):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        "La base de datos no acepta sale.status='PAID'. "
+                        "Ejecuta la migración puntual para normalizar estados."
+                    ),
+                )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Referencia inválida a cliente o inventario.",
+            )
+        except HTTPException:
+            session.rollback()
+            raise
+        except DBAPIError as e:
+            session.rollback()
+            state = _sqlstate(e)
+            if state in {"22P02", "23514"} and "PAID" in str(getattr(e, "orig", e)):
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        "La base de datos no acepta sale.status='PAID'. "
+                        "Ejecuta la migración puntual para normalizar estados."
+                    ),
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error de base de datos al actualizar la venta.",
             )
         except Exception:
             session.rollback()
@@ -1172,12 +1351,22 @@ class SaleService:
             )
 
             def mutate() -> None:
+                next_effective_price = (
+                    self._money(data["price"])
+                    if "price" in data
+                    else (
+                        line.unit_price
+                        if next_price_type == SaleLinePriceType.UNIT
+                        else line.price
+                    )
+                )
                 line.inventory_id = preview_inventory.id
                 line.quantity_units = quantity
                 line.price_type = next_price_type
                 line.quantity_mode = quantity_mode
-                if "price" in data:
-                    line.price = self._money(data["price"])
+                line.price = next_effective_price
+                if next_price_type == SaleLinePriceType.UNIT:
+                    line.unit_price = next_effective_price
                 self.repository.update_line(line, commit=False)
 
             self._apply_sale_state_delta(sale, mutate)

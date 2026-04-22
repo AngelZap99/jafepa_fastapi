@@ -14,11 +14,14 @@ from src.shared.models.category.category_model import Category
 from src.shared.models.client.client_model import Client
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.inventory_movement.inventory_movement_model import InventoryMovement
+from src.shared.models.sale_line.sale_line_model import SaleLine
 from src.shared.models.product.product_model import Product
 from src.shared.models.warehouse.warehouse_model import Warehouse
 
 
-def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventory, Client]:
+def _seed_inventory_and_client(
+    db_session, *, stock: int = 10, box_size: int = 1
+) -> tuple[Inventory, Client]:
     category = Category(name="Category")
     brand = Brand(name="Brand")
     warehouse = Warehouse(
@@ -45,7 +48,7 @@ def _seed_inventory_and_client(db_session, *, stock: int = 10) -> tuple[Inventor
 
     inventory = Inventory(
         stock=stock,
-        box_size=1,
+        box_size=box_size,
         avg_cost=Decimal("1.00"),
         last_cost=Decimal("1.00"),
         warehouse_id=warehouse.id,
@@ -337,6 +340,172 @@ def test_paid_sale_line_can_be_updated_in_place(auth_client, db_session):
     assert movements[-1].quantity == 3 * inventory.box_size
     assert movements[-1].value_type == InventoryValueType.PRICE
     assert movements[-1].unit_value == Decimal("90.00")
+
+
+def test_draft_sale_line_update_refreshes_quantity_price_and_sale_total(
+    auth_client, db_session
+):
+    inventory, client_obj = _seed_inventory_and_client(
+        db_session,
+        stock=40,
+        box_size=12,
+    )
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_units": 5,
+                    "price": "3.00",
+                    "price_type": "UNIT",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale = created.json()
+    sale_id = sale["id"]
+    sale_line_id = sale["lines"][0]["id"]
+    assert Decimal(str(sale["total_price"])) == Decimal("15.00")
+
+    updated = auth_client.put(
+        f"/api/sales/{sale_id}/lines/{sale_line_id}",
+        json={
+            "quantity_units": 7,
+            "price": "4.00",
+            "price_type": "UNIT",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    updated_line = updated.json()
+
+    assert updated_line["quantity_boxes"] == 7
+    assert updated_line["price_type"] == "UNIT"
+    assert Decimal(str(updated_line["unit_price"])) == Decimal("4.00")
+    assert Decimal(str(updated_line["total_price"])) == Decimal("28.00")
+
+    refreshed_sale = auth_client.get(f"/api/sales/{sale_id}")
+    assert refreshed_sale.status_code == 200, refreshed_sale.text
+    sale_payload = refreshed_sale.json()
+
+    assert Decimal(str(sale_payload["total_price"])) == Decimal("28.00")
+    assert Decimal(str(sale_payload["lines"][0]["unit_price"])) == Decimal("4.00")
+    assert Decimal(str(sale_payload["lines"][0]["total_price"])) == Decimal("28.00")
+
+
+def test_full_update_sale_replaces_lines_and_transitions_status_in_one_request(
+    auth_client, db_session
+):
+    inv1, client_obj = _seed_inventory_and_client(db_session, stock=120, box_size=12)
+
+    category_obj = db_session.exec(select(Category)).first()
+    brand_obj = db_session.exec(select(Brand)).first()
+    warehouse_obj = db_session.exec(select(Warehouse)).first()
+    product = Product(
+        name="Product 2",
+        code="PROD-002",
+        description=None,
+        category_id=category_obj.id,
+        brand_id=brand_obj.id,
+        image=None,
+    )
+    db_session.add(product)
+    db_session.commit()
+    inv2 = Inventory(
+        stock=60,
+        box_size=12,
+        avg_cost=Decimal("1.00"),
+        last_cost=Decimal("1.00"),
+        warehouse_id=warehouse_obj.id,
+        product_id=product.id,
+    )
+    db_session.add(inv2)
+    db_session.commit()
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "notes": "original",
+            "lines": [
+                {
+                    "inventory_id": inv1.id,
+                    "quantity_boxes": 2,
+                    "price": "100.00",
+                    "price_type": "BOX",
+                },
+                {
+                    "inventory_id": inv2.id,
+                    "quantity_boxes": 1,
+                    "price": "50.00",
+                    "price_type": "BOX",
+                },
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale = created.json()
+    sale_id = sale["id"]
+    first_line_id = sale["lines"][0]["id"]
+    removed_line_id = sale["lines"][1]["id"]
+
+    updated = auth_client.put(
+        f"/api/sales/full-update/{sale_id}",
+        json={
+            "client_id": client_obj.id,
+            "notes": "actualizada",
+            "status": "PAID",
+            "lines": [
+                {
+                    "id": first_line_id,
+                    "inventory_id": inv1.id,
+                    "quantity_boxes": 3,
+                    "price": "90.00",
+                    "price_type": "BOX",
+                },
+                {
+                    "inventory_id": inv2.id,
+                    "quantity_boxes": 2,
+                    "price": "40.00",
+                    "price_type": "BOX",
+                },
+            ],
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    sale_payload = updated.json()
+    active_lines = [line for line in sale_payload["lines"] if line["is_active"]]
+
+    assert sale_payload["status"] == "PAID"
+    assert sale_payload["notes"] == "actualizada"
+    assert Decimal(str(sale_payload["total_price"])) == Decimal("350.00")
+    assert len(active_lines) == 2
+    assert {line["inventory_id"] for line in active_lines} == {inv1.id, inv2.id}
+
+    db_session.expire_all()
+    inv1_after = db_session.get(Inventory, inv1.id)
+    inv2_after = db_session.get(Inventory, inv2.id)
+    removed_line = db_session.get(SaleLine, removed_line_id)
+    assert inv1_after is not None
+    assert inv2_after is not None
+    assert removed_line is not None
+    assert inv1_after.stock == 117
+    assert inv1_after.reserved_stock == 0
+    assert inv2_after.stock == 58
+    assert inv2_after.reserved_stock == 0
+    assert removed_line.is_active is False
+
+    refreshed_sale = auth_client.get(f"/api/sales/{sale_id}")
+    assert refreshed_sale.status_code == 200, refreshed_sale.text
+    refreshed_lines = refreshed_sale.json()["lines"]
+    assert any(line["id"] == removed_line_id and line["is_active"] is False for line in refreshed_lines)
 
 
 def test_paid_sale_accepts_add_and_delete_line(auth_client, db_session):

@@ -5,6 +5,7 @@ from src.shared.database.dependencies import SessionDep
 
 from src.modules.sale.sale_schema import (
     SaleCreateWithLines,
+    SaleFullUpdate,
     SaleUpdate,
     SaleUpdateStatus,
     SaleResponse,
@@ -103,6 +104,20 @@ def update_sale(
     sale_service: SaleService = Depends(get_sale_service),
 ):
     return sale_service.update_sale(sale_id, payload, current_user)
+
+
+@router.put(
+    "/full-update/{sale_id}",
+    response_model=SaleResponse,
+    status_code=status.HTTP_200_OK,
+)
+def full_update_sale(
+    sale_id: int,
+    payload: SaleFullUpdate,
+    current_user = Depends(get_optional_current_user),
+    sale_service: SaleService = Depends(get_sale_service),
+):
+    return sale_service.full_update_sale(sale_id, payload, current_user)
 
 
 @router.put(

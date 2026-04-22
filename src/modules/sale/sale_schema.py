@@ -41,6 +41,12 @@ class SaleLineCreate(SaleLineBase):
     pass
 
 
+class SaleLineReplace(SaleLineBase):
+    model_config = ConfigDict(extra="forbid")
+
+    id: Optional[int] = Field(default=None, gt=0)
+
+
 class SaleLineUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -131,6 +137,16 @@ class SaleUpdate(BaseModel):
 
 class SaleUpdateStatus(BaseModel):
     status: SaleStatus
+
+
+class SaleFullUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sale_date: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=500)
+    client_id: int = Field(gt=0)
+    status: SaleStatus
+    lines: List[SaleLineReplace] = Field(default_factory=list)
 
 
 class SaleResponse(BaseModel):
