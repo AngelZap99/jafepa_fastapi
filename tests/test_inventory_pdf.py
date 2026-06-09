@@ -422,6 +422,51 @@ def test_pdf_generator_uses_nine_products_per_page(monkeypatch):
     assert "Producto 10" in html
 
 
+def test_sale_pdf_always_displays_unit_price(monkeypatch):
+    generator = PDFGenerator()
+    captured = {}
+
+    def fake_render_pdf(pages_html, extra_styles=""):
+        captured["pages_html"] = pages_html
+        return b"%PDF-1.4 sale"
+
+    monkeypatch.setattr(generator, "_render_pdf", fake_render_pdf, raising=True)
+    monkeypatch.setattr(
+        generator,
+        "_image_to_base64",
+        lambda *_args, **_kwargs: "data:image/png;base64,AAA",
+        raising=True,
+    )
+
+    sale = SimpleNamespace(
+        id=7,
+        sale_date="2026-06-09",
+        client=SimpleNamespace(name="Cliente PDF"),
+        lines=[
+            SimpleNamespace(
+                is_active=True,
+                product_name="Producto caja",
+                product_code="SKU-BOX-1",
+                quantity_boxes=2,
+                box_size=10,
+                unit_price=Decimal("4.00"),
+                box_price=Decimal("40.00"),
+                price=Decimal("40.00"),
+                total_price=Decimal("80.00"),
+            )
+        ],
+    )
+
+    pdf_bytes = generator.generate_sale_invoice_pdf(sale, delivered_by_name="Admin")
+
+    assert pdf_bytes == b"%PDF-1.4 sale"
+    html = captured["pages_html"]
+    assert "Precio unitario" in html
+    assert "Precio producto" not in html
+    assert "$4.00" in html
+    assert "$40.00" not in html
+
+
 def test_inventory_pdf_returns_503_when_playwright_browser_is_missing(
     auth_client, monkeypatch
 ):

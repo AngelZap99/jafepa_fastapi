@@ -17,6 +17,7 @@ from src.shared.models.inventory_movement.inventory_movement_model import Invent
 from src.shared.models.sale_line.sale_line_model import SaleLine
 from src.shared.models.product.product_model import Product
 from src.shared.models.warehouse.warehouse_model import Warehouse
+from src.modules.inventory.domain.pdf_generator import PDFGenerator
 
 
 def _seed_inventory_and_client(
@@ -294,7 +295,7 @@ def test_paid_sale_line_can_be_updated_in_place(auth_client, db_session):
                     "inventory_id": inventory.id,
                     "quantity_boxes": 2,
                     "price": "100.00",
-                    "price_type": "BOX",
+                    "price_type": "UNIT",
                 }
             ],
         },
@@ -315,14 +316,14 @@ def test_paid_sale_line_can_be_updated_in_place(auth_client, db_session):
         json={
             "quantity_boxes": 3,
             "price": "90.00",
-            "price_type": "BOX",
+            "price_type": "UNIT",
         },
     )
     assert updated.status_code == 200, updated.text
     updated_line = updated.json()
     assert updated_line["quantity_boxes"] == 3
-    assert updated_line["price_type"] == "BOX"
-    assert Decimal(str(updated_line["box_price"])) == Decimal("90.00")
+    assert updated_line["price_type"] == "UNIT"
+    assert Decimal(str(updated_line["unit_price"])) == Decimal("90.00")
 
     db_session.expire_all()
     inv = db_session.get(Inventory, inventory.id)
@@ -396,6 +397,155 @@ def test_draft_sale_line_update_refreshes_quantity_price_and_sale_total(
     assert Decimal(str(sale_payload["total_price"])) == Decimal("28.00")
     assert Decimal(str(sale_payload["lines"][0]["unit_price"])) == Decimal("4.00")
     assert Decimal(str(sale_payload["lines"][0]["total_price"])) == Decimal("28.00")
+
+
+def test_sale_supports_independent_price_type_for_box_inventory(auth_client, db_session):
+    inventory, client_obj = _seed_inventory_and_client(
+        db_session,
+        stock=20,
+        box_size=12,
+    )
+
+    box_sale = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_boxes": 2,
+                    "price": "10.00",
+                    "price_type": "UNIT",
+                }
+            ],
+        },
+    )
+    assert box_sale.status_code == 201, box_sale.text
+    box_line = box_sale.json()["lines"][0]
+    assert box_line["quantity_mode"] == "BOX"
+    assert box_line["price_type"] == "UNIT"
+    assert box_line["box_size"] == 12
+    assert Decimal(str(box_line["unit_price"])) == Decimal("10.00")
+    assert Decimal(str(box_line["box_price"])) == Decimal("120.00")
+    assert Decimal(str(box_line["total_price"])) == Decimal("240.00")
+
+    unit_sale = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_units": 5,
+                    "price": "120.00",
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+    assert unit_sale.status_code == 201, unit_sale.text
+    unit_sale_payload = unit_sale.json()
+    unit_line = unit_sale_payload["lines"][0]
+    assert unit_line["quantity_mode"] == "UNIT"
+    assert unit_line["price_type"] == "BOX"
+    assert unit_line["box_size"] == 12
+    assert Decimal(str(unit_line["unit_price"])) == Decimal("10.00")
+    assert Decimal(str(unit_line["box_price"])) == Decimal("120.00")
+    assert Decimal(str(unit_line["total_price"])) == Decimal("50.00")
+
+    paid = auth_client.put(
+        f"/api/sales/update-status/{unit_sale_payload['id']}",
+        json={"status": "PAID"},
+    )
+    assert paid.status_code == 200, paid.text
+
+    db_session.expire_all()
+    movements = (
+        db_session.exec(
+            select(InventoryMovement)
+            .where(InventoryMovement.sale_line_id == unit_line["id"])
+            .order_by(InventoryMovement.id)
+        ).all()
+    )
+    assert movements[-1].event_type == InventoryEventType.SALE_APPROVED
+    assert movements[-1].quantity == 5
+    assert movements[-1].unit_value == Decimal("10.00")
+
+
+def test_unitary_inventory_rejects_box_price_type(auth_client, db_session):
+    inventory, client_obj = _seed_inventory_and_client(db_session, stock=10, box_size=1)
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_units": 1,
+                    "price": "25.00",
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 422, created.text
+    assert created.json()["message"] == "Los productos unitarios solo aceptan precio unitario."
+
+
+def test_draft_sale_line_update_allows_unit_quantity_with_box_price(
+    auth_client, db_session
+):
+    inventory, client_obj = _seed_inventory_and_client(
+        db_session,
+        stock=15,
+        box_size=6,
+    )
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_boxes": 1,
+                    "price": "60.00",
+                    "price_type": "BOX",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale = created.json()
+    sale_id = sale["id"]
+    sale_line_id = sale["lines"][0]["id"]
+
+    updated = auth_client.put(
+        f"/api/sales/{sale_id}/lines/{sale_line_id}",
+        json={
+            "quantity_units": 3,
+            "price": "60.00",
+            "price_type": "BOX",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    updated_line = updated.json()
+
+    assert updated_line["quantity_mode"] == "UNIT"
+    assert updated_line["price_type"] == "BOX"
+    assert updated_line["box_size"] == 6
+    assert Decimal(str(updated_line["unit_price"])) == Decimal("10.00")
+    assert Decimal(str(updated_line["box_price"])) == Decimal("60.00")
+    assert Decimal(str(updated_line["total_price"])) == Decimal("30.00")
 
 
 def test_sale_rejects_mixing_unit_and_box_lines_for_same_product(auth_client, db_session):
@@ -589,7 +739,7 @@ def test_paid_sale_accepts_add_and_delete_line(auth_client, db_session):
                     "inventory_id": inv1.id,
                     "quantity_boxes": 2,
                     "price": "100.00",
-                    "price_type": "BOX",
+                    "price_type": "UNIT",
                 }
             ],
         },
@@ -649,7 +799,7 @@ def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
                     "inventory_id": inventory.id,
                     "quantity_boxes": 2,
                     "price": str(sale_price),
-                    "price_type": "BOX",
+                    "price_type": "UNIT",
                 }
             ],
         },
@@ -691,7 +841,7 @@ def test_sales_metrics_ignore_reversed_history_and_use_latest_effective_value(
 
     updated = auth_client.put(
         f"/api/sales/{sale_id}/lines/{sale_line_id}",
-        json={"price": "7.00", "price_type": "BOX"},
+        json={"price": "7.00", "price_type": "UNIT"},
     )
     assert updated.status_code == 200, updated.text
 
@@ -871,7 +1021,7 @@ def test_piece_sale_projects_box_opening_in_draft_and_executes_it_on_paid(
     sale = created.json()
     line = sale["lines"][0]
     assert line["quantity_mode"] == "UNIT"
-    assert line["box_size"] == 1
+    assert line["box_size"] == 12
     assert line["quantity_boxes"] == 5
     assert line["inventory_id"] == box_inventory.id
     assert line["reservation_applied"] is True
@@ -1083,3 +1233,47 @@ def test_piece_sale_projection_uses_existing_unit_stock(auth_client, db_session)
     assert line["projected_units_from_stock"] == 4
     assert line["projected_boxes_to_open"] == 2
     assert line["projected_units_leftover"] == 0
+
+
+def test_sale_invoice_pdf_returns_503_when_playwright_browser_is_missing(
+    auth_client, db_session, monkeypatch
+):
+    inventory, client_obj = _seed_inventory_and_client(db_session, stock=10, box_size=1)
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "notes": "pdf test",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_units": 2,
+                    "price": "10.00",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale_id = created.json()["id"]
+
+    def raise_browser_missing(self, sale, delivered_by_name=None):
+        raise RuntimeError(
+            "Playwright browser executable is missing or unavailable. "
+            "Run `playwright install chromium` in this environment."
+        )
+
+    monkeypatch.setattr(
+        PDFGenerator,
+        "generate_sale_invoice_pdf",
+        raise_browser_missing,
+        raising=True,
+    )
+
+    response = auth_client.get(f"/api/sales/{sale_id}/invoice")
+
+    assert response.status_code == 503, response.text
+    assert response.json()["message"] == "Servicio no disponible"
+    assert response.json()["errors"] == []

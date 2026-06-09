@@ -67,7 +67,7 @@ def test_inventory_detail_lists_active_reservations(auth_client, db_session):
                     "inventory_id": inventory.id,
                     "quantity_boxes": 3,
                     "price": "50.00",
-                    "price_type": "BOX",
+                    "price_type": "UNIT",
                 }
             ],
         },
@@ -105,7 +105,7 @@ def test_product_stock_bff_exposes_reserved_and_available_boxes(auth_client, db_
                     "inventory_id": inventory.id,
                     "quantity_boxes": 5,
                     "price": "25.00",
-                    "price_type": "BOX",
+                    "price_type": "UNIT",
                 }
             ],
         },

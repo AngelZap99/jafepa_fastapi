@@ -6,7 +6,6 @@ import requests
 import base64
 from html import escape
 
-from src.shared.enums.sale_enums import SaleLinePriceType
 from src.shared.files.local_file_storage import resolve_media_path
 
 
@@ -177,18 +176,14 @@ class PDFGenerator:
 
             product_name = getattr(line, "product_name", None) or "Producto"
             product_code = getattr(line, "product_code", None) or "N/A"
-            quantity_boxes = int(getattr(line, "quantity_boxes", line.quantity_units))
+            quantity_boxes = int(
+                getattr(line, "quantity_boxes", None)
+                or getattr(line, "quantity_units", 0)
+            )
             box_size = int(getattr(line, "box_size", None) or 1)
             quantity_units = quantity_boxes * box_size
-            price_type = getattr(line, "price_type", SaleLinePriceType.BOX)
-            price_type_value = getattr(price_type, "value", price_type)
-            is_unit_price = str(price_type_value).upper() == "UNIT" or box_size == 1
             pieces_label = "Unitario" if box_size == 1 else f"{box_size} Piezas/Caja"
-            price_value = (
-                getattr(line, "unit_price", None)
-                if is_unit_price
-                else getattr(line, "box_price", None)
-            ) or line.price
+            price_value = getattr(line, "unit_price", None) or line.price
             line_total = _money(getattr(line, "total_price", None))
             subtotal_amount += line_total
 
@@ -231,7 +226,7 @@ class PDFGenerator:
                         <th class="col-qty">Cajas</th>
                         <th class="col-box">Piezas/Caja</th>
                         <th class="col-units">Piezas totales</th>
-                        <th class="col-price">Precio producto</th>
+                        <th class="col-price">Precio unitario</th>
                         <th class="col-total">Total</th>
                     </tr>
                 </thead>

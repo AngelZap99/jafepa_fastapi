@@ -315,22 +315,34 @@ class SaleService:
             unit_price = self._money(box_price / Decimal(box_size))
         return unit_price, box_price
 
-    def _effective_request_quantity_and_mode(
+    def _validate_sale_price_type(
         self,
         *,
         inventory: Inventory,
         price_type: SaleLinePriceType,
+    ) -> None:
+        if (
+            int(inventory.box_size or 1) <= 1
+            and price_type == SaleLinePriceType.BOX
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Los productos unitarios solo aceptan precio unitario.",
+            )
+
+    def _effective_request_quantity_and_mode(
+        self,
+        *,
+        inventory: Inventory,
         quantity_boxes: int | None,
         quantity_units: int | None,
     ) -> tuple[int, SaleLineQuantityMode]:
         if quantity_boxes is not None:
             return int(quantity_boxes), SaleLineQuantityMode.BOX
         if quantity_units is not None:
-            if int(inventory.box_size or 1) > 1 and price_type == SaleLinePriceType.UNIT:
-                return int(quantity_units), SaleLineQuantityMode.UNIT
-            return int(quantity_units), SaleLineQuantityMode.BOX
+            return int(quantity_units), SaleLineQuantityMode.UNIT
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Debes enviar la cantidad en cajas o la cantidad en piezas.",
         )
 
@@ -408,11 +420,7 @@ class SaleService:
         price_type: SaleLinePriceType,
         quantity_mode: SaleLineQuantityMode,
     ) -> None:
-        snapshot_box_size = (
-            1
-            if quantity_mode == SaleLineQuantityMode.UNIT and int(inventory.box_size or 1) > 1
-            else int(inventory.box_size or 1)
-        )
+        snapshot_box_size = int(inventory.box_size or 1)
         unit_price, box_price = self._normalize_sale_price(
             price=price,
             price_type=price_type,
@@ -430,6 +438,9 @@ class SaleService:
         line.total_price = self._money(Decimal(quantity) * total_unit)
         line.product_code = product.code if product else None
         line.product_name = product.name if product else None
+
+    def _captured_line_price(self, line: SaleLine) -> Decimal:
+        return line.unit_price if line.price_type == SaleLinePriceType.UNIT else line.box_price
 
     def _line_total(self, line: SaleLine) -> Decimal:
         return line.total_price
@@ -625,9 +636,7 @@ class SaleService:
             if not line.is_active:
                 continue
             effective_price = (
-                line.unit_price
-                if line.price_type == SaleLinePriceType.UNIT
-                else line.price
+                self._captured_line_price(line)
             )
             if effective_price <= Decimal("0.00"):
                 raise HTTPException(
@@ -651,11 +660,7 @@ class SaleService:
                 line,
                 inventory=source_inventory,
                 quantity=line.quantity_units,
-                price=(
-                    line.unit_price
-                    if line.price_type == SaleLinePriceType.UNIT
-                    else line.price
-                ),
+                price=self._captured_line_price(line),
                 price_type=line.price_type,
                 quantity_mode=line.quantity_mode,
             )
@@ -751,11 +756,7 @@ class SaleService:
                 line,
                 inventory=source_inventory,
                 quantity=line.quantity_units,
-                price=(
-                    line.unit_price
-                    if line.price_type == SaleLinePriceType.UNIT
-                    else line.price
-                ),
+                price=self._captured_line_price(line),
                 price_type=line.price_type,
                 quantity_mode=line.quantity_mode,
             )
@@ -940,9 +941,12 @@ class SaleService:
         try:
             for payload_line in payload.lines:
                 inventory = self._get_inventory_or_404(payload_line.inventory_id)
-                quantity, quantity_mode = self._effective_request_quantity_and_mode(
+                self._validate_sale_price_type(
                     inventory=inventory,
                     price_type=payload_line.price_type,
+                )
+                quantity, quantity_mode = self._effective_request_quantity_and_mode(
+                    inventory=inventory,
                     quantity_boxes=payload_line.quantity_boxes,
                     quantity_units=payload_line.quantity_units,
                 )
@@ -965,22 +969,17 @@ class SaleService:
                         detail="No se permite repetir el mismo inventario efectivo en las líneas de venta.",
                     )
                 seen_keys.add(key)
+                line = SaleLine(inventory_id=inventory.id)
+                self._apply_line_snapshot(
+                    line,
+                    inventory=inventory,
+                    quantity=quantity,
+                    price=self._money(payload_line.price),
+                    price_type=payload_line.price_type,
+                    quantity_mode=quantity_mode,
+                )
                 sale.lines.append(
-                    SaleLine(
-                        inventory_id=inventory.id,
-                        quantity_units=quantity,
-                        box_size=inventory.box_size,
-                        price=self._money(payload_line.price),
-                        price_type=payload_line.price_type,
-                        quantity_mode=quantity_mode,
-                        unit_price=self._money(payload_line.price)
-                        if payload_line.price_type == SaleLinePriceType.UNIT
-                        else Decimal("0.00"),
-                        box_price=Decimal("0.00"),
-                        total_price=Decimal("0.00"),
-                        product_code=inventory.product.code if inventory.product else None,
-                        product_name=inventory.product.name if inventory.product else None,
-                    )
+                    line
                 )
 
             session.add(sale)
@@ -1134,9 +1133,12 @@ class SaleService:
 
                 for payload_line in payload.lines:
                     inventory = self._get_inventory_or_404(payload_line.inventory_id)
-                    quantity, quantity_mode = self._effective_request_quantity_and_mode(
+                    self._validate_sale_price_type(
                         inventory=inventory,
                         price_type=payload_line.price_type,
+                    )
+                    quantity, quantity_mode = self._effective_request_quantity_and_mode(
+                        inventory=inventory,
                         quantity_boxes=payload_line.quantity_boxes,
                         quantity_units=payload_line.quantity_units,
                     )
@@ -1175,43 +1177,30 @@ class SaleService:
                         seen_line_ids.add(payload_line.id)
 
                         line.inventory_id = inventory.id
-                        line.quantity_units = quantity
-                        line.box_size = inventory.box_size
-                        line.price_type = payload_line.price_type
-                        line.quantity_mode = quantity_mode
-                        line.price = effective_price
-                        line.unit_price = (
-                            effective_price
-                            if payload_line.price_type == SaleLinePriceType.UNIT
-                            else Decimal("0.00")
+                        self._apply_line_snapshot(
+                            line,
+                            inventory=inventory,
+                            quantity=quantity,
+                            price=effective_price,
+                            price_type=payload_line.price_type,
+                            quantity_mode=quantity_mode,
                         )
-                        line.box_price = Decimal("0.00")
-                        line.total_price = Decimal("0.00")
-                        line.product_code = inventory.product.code if inventory.product else None
-                        line.product_name = inventory.product.name if inventory.product else None
                         line.is_active = True
                         self.repository.update_line(line, commit=False)
                         continue
 
+                    line = SaleLine(inventory_id=inventory.id)
+                    self._apply_line_snapshot(
+                        line,
+                        inventory=inventory,
+                        quantity=quantity,
+                        price=effective_price,
+                        price_type=payload_line.price_type,
+                        quantity_mode=quantity_mode,
+                    )
                     self.repository.add_line(
                         sale,
-                        SaleLine(
-                            inventory_id=inventory.id,
-                            quantity_units=quantity,
-                            box_size=inventory.box_size,
-                            price=effective_price,
-                            price_type=payload_line.price_type,
-                            quantity_mode=quantity_mode,
-                            unit_price=(
-                                effective_price
-                                if payload_line.price_type == SaleLinePriceType.UNIT
-                                else Decimal("0.00")
-                            ),
-                            box_price=Decimal("0.00"),
-                            total_price=Decimal("0.00"),
-                            product_code=inventory.product.code if inventory.product else None,
-                            product_name=inventory.product.name if inventory.product else None,
-                        ),
+                        line,
                         commit=False,
                     )
 
@@ -1303,9 +1292,12 @@ class SaleService:
 
         try:
             inventory = self._get_inventory_or_404(payload.inventory_id)
-            quantity, quantity_mode = self._effective_request_quantity_and_mode(
+            self._validate_sale_price_type(
                 inventory=inventory,
                 price_type=payload.price_type,
+            )
+            quantity, quantity_mode = self._effective_request_quantity_and_mode(
+                inventory=inventory,
                 quantity_boxes=payload.quantity_boxes,
                 quantity_units=payload.quantity_units,
             )
@@ -1319,23 +1311,18 @@ class SaleService:
 
             def mutate() -> SaleLine:
                 nonlocal created_line
+                line = SaleLine(inventory_id=inventory.id)
+                self._apply_line_snapshot(
+                    line,
+                    inventory=inventory,
+                    quantity=quantity,
+                    price=self._money(payload.price),
+                    price_type=payload.price_type,
+                    quantity_mode=quantity_mode,
+                )
                 created_line = self.repository.add_line(
                     sale,
-                    SaleLine(
-                        inventory_id=inventory.id,
-                        quantity_units=quantity,
-                        box_size=inventory.box_size,
-                        price=self._money(payload.price),
-                        price_type=payload.price_type,
-                        quantity_mode=quantity_mode,
-                        unit_price=self._money(payload.price)
-                        if payload.price_type == SaleLinePriceType.UNIT
-                        else Decimal("0.00"),
-                        box_price=Decimal("0.00"),
-                        total_price=Decimal("0.00"),
-                        product_code=inventory.product.code if inventory.product else None,
-                        product_name=inventory.product.name if inventory.product else None,
-                    ),
+                    line,
                     commit=False,
                 )
                 return created_line
@@ -1380,10 +1367,13 @@ class SaleService:
                 else self._get_inventory_or_404(line.inventory_id)
             )
             next_price_type = data.get("price_type", line.price_type)
+            self._validate_sale_price_type(
+                inventory=preview_inventory,
+                price_type=next_price_type,
+            )
             if "quantity_boxes" in data or "quantity_units" in data:
                 quantity, quantity_mode = self._effective_request_quantity_and_mode(
                     inventory=preview_inventory,
-                    price_type=next_price_type,
                     quantity_boxes=data.get("quantity_boxes"),
                     quantity_units=data.get("quantity_units"),
                 )
@@ -1407,19 +1397,17 @@ class SaleService:
                 next_effective_price = (
                     self._money(data["price"])
                     if "price" in data
-                    else (
-                        line.unit_price
-                        if next_price_type == SaleLinePriceType.UNIT
-                        else line.price
-                    )
+                    else self._captured_line_price(line)
                 )
                 line.inventory_id = preview_inventory.id
-                line.quantity_units = quantity
-                line.price_type = next_price_type
-                line.quantity_mode = quantity_mode
-                line.price = next_effective_price
-                if next_price_type == SaleLinePriceType.UNIT:
-                    line.unit_price = next_effective_price
+                self._apply_line_snapshot(
+                    line,
+                    inventory=preview_inventory,
+                    quantity=quantity,
+                    price=next_effective_price,
+                    price_type=next_price_type,
+                    quantity_mode=quantity_mode,
+                )
                 self.repository.update_line(line, commit=False)
 
             self._apply_sale_state_delta(sale, mutate)
@@ -1598,10 +1586,16 @@ class SaleService:
         delivered_by_name = self._get_user_display_name(
             getattr(sale, "paid_by", None) or getattr(sale, "updated_by", None)
         )
-        pdf_bytes = self._pdf_generator.generate_sale_invoice_pdf(
-            sale,
-            delivered_by_name=delivered_by_name,
-        )
+        try:
+            pdf_bytes = self._pdf_generator.generate_sale_invoice_pdf(
+                sale,
+                delivered_by_name=delivered_by_name,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
 
         return Response(
             content=pdf_bytes,

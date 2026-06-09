@@ -25,7 +25,7 @@ class SaleLineBase(BaseModel):
     quantity_boxes: Optional[int] = Field(default=None, gt=0)
     quantity_units: Optional[int] = Field(default=None, gt=0)
     price: Decimal = Field(ge=Decimal("0.00"))
-    price_type: SaleLinePriceType = Field(default=SaleLinePriceType.BOX)
+    price_type: SaleLinePriceType = Field(default=SaleLinePriceType.UNIT)
 
     @model_validator(mode="after")
     def validate_quantity(self):
@@ -72,6 +72,7 @@ class SaleLineResponse(BaseModel):
     sale_id: int
     inventory_id: int
     quantity_boxes: int
+    quantity_units: int
     box_size: int
     price: Decimal
     price_type: SaleLinePriceType
@@ -212,6 +213,7 @@ class SaleReportSaleLine(BaseModel):
     id: int
     inventory_id: int
     quantity_boxes: int
+    quantity_units: int
     box_size: int
     price: Decimal
     price_type: SaleLinePriceType
