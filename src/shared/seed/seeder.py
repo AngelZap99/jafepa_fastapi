@@ -6,8 +6,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
-from sqlmodel import Session
+from sqlalchemy import func
+from sqlmodel import Session, select
 
 from src.shared.enums.invoice_enums import InvoiceStatus
 from src.shared.enums.sale_enums import SaleStatus
@@ -91,7 +91,16 @@ def _get_or_none_by(session: Session, model, **filters):
 
 
 def _count_rows(session: Session, model) -> int:
-    return int(session.exec(select(func.count()).select_from(model)).one() or 0)
+    result = session.exec(select(func.count()).select_from(model)).one()
+    if result is None:
+        return 0
+    try:
+        first_value = result[0]
+    except (TypeError, IndexError, KeyError):
+        first_value = result
+    else:
+        return int(first_value or 0)
+    return int(result or 0)
 
 
 def _upsert(

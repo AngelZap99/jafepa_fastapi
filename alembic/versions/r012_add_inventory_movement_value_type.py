@@ -19,40 +19,67 @@ depends_on = None
 def upgrade() -> None:
     bind = op.get_bind()
     inspector = inspect(bind)
+    value_type_enum = sa.Enum("COST", "PRICE", name="inventoryvaluetype")
 
     if "inventory_movement" not in inspector.get_table_names():
         return
 
-    existing_cols = {c["name"] for c in inspector.get_columns("inventory_movement")}
-    if "value_type" not in existing_cols:
+    existing_columns = {
+        column["name"]: column for column in inspector.get_columns("inventory_movement")
+    }
+    existing_indexes = {
+        index["name"] for index in inspector.get_indexes("inventory_movement")
+    }
+
+    if "value_type" not in existing_columns:
         op.add_column(
             "inventory_movement",
-            sa.Column("value_type", sa.String(length=10), nullable=True),
+            sa.Column("value_type", value_type_enum, nullable=True),
         )
+        value_type_column_type = value_type_enum
+    else:
+        value_type_column_type = existing_columns["value_type"]["type"]
 
-    op.execute(
-        """
-        UPDATE inventory_movement
-        SET value_type = CASE
-            WHEN source_type = 'SALE' THEN 'PRICE'
-            ELSE 'COST'
-        END
-        WHERE value_type IS NULL
-        """
+    is_postgres_enum = bind.dialect.name == "postgresql" and isinstance(
+        value_type_column_type, sa.Enum
     )
+
+    if is_postgres_enum:
+        op.execute(
+            """
+            UPDATE inventory_movement
+            SET value_type = CASE
+                WHEN source_type = 'SALE' THEN 'PRICE'::inventoryvaluetype
+                ELSE 'COST'::inventoryvaluetype
+            END
+            WHERE value_type IS NULL
+            """
+        )
+    else:
+        op.execute(
+            """
+            UPDATE inventory_movement
+            SET value_type = CASE
+                WHEN source_type = 'SALE' THEN 'PRICE'
+                ELSE 'COST'
+            END
+            WHERE value_type IS NULL
+            """
+        )
 
     op.alter_column(
         "inventory_movement",
         "value_type",
-        existing_type=sa.String(length=10),
         nullable=False,
     )
-    op.create_index(
-        "ix_inventory_movement_value_type",
-        "inventory_movement",
-        ["value_type"],
-        unique=False,
-    )
+
+    if "ix_inventory_movement_value_type" not in existing_indexes:
+        op.create_index(
+            "ix_inventory_movement_value_type",
+            "inventory_movement",
+            ["value_type"],
+            unique=False,
+        )
 
 
 def downgrade() -> None:
