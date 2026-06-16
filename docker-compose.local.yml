@@ -1,0 +1,8 @@
+services:
+  postgres:
+    env_file:
+      - .env.local
+
+  api:
+    env_file:
+      - .env.local

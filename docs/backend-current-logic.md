@@ -433,6 +433,8 @@ Compatibilidad:
 #### Responsable para PDF
 - El PDF usa `paid_by` si existe.
 - Si no existe `paid_by`, usa `updated_by` como fallback para "Atendido por".
+- La nota de venta en PDF no muestra subtotal ni IVA; solo imprime el total como suma de las lineas activas.
+- En el PDF, las lineas por pieza no se expanden como cajas; muestran cajas como `-` y piezas totales como `quantity_units`.
 
 ### 6. Historicos y reportes
 
@@ -547,3 +549,5 @@ Si el cambio modifica comportamiento, agregar ademas una nota breve al final con
 - 2026-04-17: ventas ahora permiten precio `0.00` en `DRAFT`, agregan auditoria `paid_by` / `cancelled_by`, y soportan venta por pieza con apertura automatica de caja.
 - 2026-04-17: facturas ahora pueden crear productos inline mediante `new_product`.
 - 2026-04-20: el almacenamiento de imagenes se movio de S3 a disco local; el backend ahora las sirve desde una URL publica local bajo `/api/media/...` sin cambiar el contrato `image` para frontend.
+- 2026-06-16: la nota de venta en PDF dejo de mostrar subtotal e IVA; el total impreso ahora coincide con la suma de lineas activas.
+- 2026-06-16: la nota de venta en PDF ahora distingue lineas por caja y por pieza; el seeder local genera ventas por caja cuando el inventario tiene `box_size > 1`.
