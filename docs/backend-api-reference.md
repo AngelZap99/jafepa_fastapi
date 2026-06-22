@@ -19,6 +19,8 @@ Documento generado desde el backend actual para compartir con frontend. La inten
   - `MEDIA_ROOT=storage/media`
   - `MEDIA_URL_PREFIX=/api/media`
   - `MEDIA_PUBLIC_BASE_URL=https://tu-dominio-backend`
+- Para ejecutar el backend local fuera de Docker con `.env.local`, usar `DB_HOST=localhost` o `127.0.0.1`. Dentro de Docker Compose, usar `DB_HOST=postgres`.
+- Los archivos `.env`, `.env.local` y `.env.*` son locales y no deben versionarse; produccion debe inyectar secrets desde el runtime o CI/CD.
 - Si existe un proxy delante de la API, tambien debe exponer `/api/media/*` hacia el mismo contenedor.
 - La vigencia de tokens se controla por entorno:
   - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`

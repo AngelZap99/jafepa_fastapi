@@ -1,9 +1,12 @@
 from decimal import Decimal
 
+import pytest
 from fastapi import HTTPException
 from sqlmodel import select
 
+from src.modules.inventory.domain.inventory_repository import InventoryRepository
 from src.modules.inventory.domain.inventory_service import InventoryService
+from src.modules.inventory.inventory_schema import InventoryCreate
 from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
@@ -257,8 +260,8 @@ def test_inventory_create_returns_404_for_missing_product_or_warehouse(auth_clie
     assert missing_warehouse.json()["message"] == "Almacén no encontrado"
 
 
-def test_inventory_create_returns_409_for_duplicate_unique_key(auth_client, db_session):
-    data = _seed_inventory_catalog(db_session)
+def test_inventory_create_sums_stock_for_duplicate_unique_key(auth_client, db_session):
+    data = _seed_inventory_catalog(db_session, stock=5, box_size=2)
 
     response = auth_client.post(
         "/api/inventory/create",
@@ -271,13 +274,115 @@ def test_inventory_create_returns_409_for_duplicate_unique_key(auth_client, db_s
         },
     )
 
-    assert response.status_code == 409, response.text
+    assert response.status_code == 201, response.text
     payload = response.json()
-    assert (
-        payload["message"]
-        == "Ya existe un inventario para este producto, almacén y tamaño de caja."
+    assert payload["id"] == data["inventory"].id
+    assert payload["stock"] == 14
+    assert Decimal(str(payload["avg_cost"])) == data["inventory"].avg_cost
+    assert Decimal(str(payload["last_cost"])) == data["inventory"].last_cost
+
+    movements = (
+        db_session.exec(
+            select(InventoryMovement).where(
+                InventoryMovement.inventory_id == data["inventory"].id
+            )
+        ).all()
     )
-    assert payload["errors"][0]["field"] == "product_id"
+    assert len(movements) == 1
+    movement = movements[0]
+    assert movement.source_type == InventorySourceType.MANUAL
+    assert movement.event_type == InventoryEventType.MANUAL_STOCK_ADJUSTED
+    assert movement.movement_type == InventoryMovementType.IN_
+    assert movement.quantity == 9
+    assert movement.prev_stock == 5
+    assert movement.new_stock == 14
+
+    unitary_inventory = db_session.exec(
+        select(Inventory).where(
+            Inventory.product_id == data["product"].id,
+            Inventory.warehouse_id == data["warehouse"].id,
+            Inventory.box_size == 1,
+        )
+    ).first()
+    assert unitary_inventory is not None
+    assert unitary_inventory.stock == 0
+    assert unitary_inventory.is_active is True
+
+
+def test_inventory_create_reactivates_and_sums_inactive_duplicate(auth_client, db_session):
+    data = _seed_inventory_catalog(db_session, stock=5, box_size=2)
+    data["inventory"].is_active = False
+    db_session.add(data["inventory"])
+    db_session.commit()
+
+    response = auth_client.post(
+        "/api/inventory/create",
+        json={
+            "product_id": data["product"].id,
+            "warehouse_id": data["warehouse"].id,
+            "stock": 4,
+            "box_size": data["inventory"].box_size,
+            "is_active": True,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    assert payload["id"] == data["inventory"].id
+    assert payload["stock"] == 9
+    assert payload["is_active"] is True
+
+    movements = (
+        db_session.exec(
+            select(InventoryMovement).where(
+                InventoryMovement.inventory_id == data["inventory"].id
+            )
+        ).all()
+    )
+    assert len(movements) == 1
+    movement = movements[0]
+    assert movement.event_type == InventoryEventType.MANUAL_STOCK_ADJUSTED
+    assert movement.movement_type == InventoryMovementType.IN_
+    assert movement.quantity == 4
+    assert movement.prev_stock == 5
+    assert movement.new_stock == 9
+
+
+def test_inventory_duplicate_create_rolls_back_when_unitary_placeholder_fails(
+    db_session, monkeypatch
+):
+    data = _seed_inventory_catalog(db_session, stock=5, box_size=2)
+    service = InventoryService(InventoryRepository(db_session))
+
+    def fail_unitary_placeholder(*args, **kwargs):
+        raise RuntimeError("placeholder failed")
+
+    monkeypatch.setattr(
+        service,
+        "_ensure_unitary_placeholder",
+        fail_unitary_placeholder,
+    )
+
+    with pytest.raises(RuntimeError, match="placeholder failed"):
+        service.create_inventory(
+            InventoryCreate(
+                product_id=data["product"].id,
+                warehouse_id=data["warehouse"].id,
+                stock=4,
+                box_size=data["inventory"].box_size,
+                is_active=True,
+            )
+        )
+
+    db_session.refresh(data["inventory"])
+    assert data["inventory"].stock == 5
+
+    movements = db_session.exec(
+        select(InventoryMovement).where(
+            InventoryMovement.inventory_id == data["inventory"].id
+        )
+    ).all()
+    assert movements == []
 
 
 def test_inventory_update_only_changes_allowed_fields_and_records_stock_delta(auth_client, db_session):

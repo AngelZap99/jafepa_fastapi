@@ -184,7 +184,9 @@ Implicacion:
 
 #### Creacion manual
 - Crear inventario registra movimiento manual de entrada si `stock > 0`.
-- Si el inventario se crea con `box_size > 1`, el backend tambien crea o reactiva un placeholder unitario con `box_size = 1` y `stock = 0`.
+- Si ya existe un inventario para la misma combinacion `warehouse_id + product_id + box_size`, la creacion manual no devuelve conflicto: suma el `stock` enviado al inventario existente, lo reactiva con `is_active = True` y registra un movimiento manual de ajuste por la diferencia.
+- La suma manual de stock no recalcula `avg_cost` ni `last_cost`. Este flujo representa ingreso sin factura; los costos se mantienen como estaban.
+- Si el inventario se crea o actualiza por duplicado con `box_size > 1`, el backend tambien crea o reactiva un placeholder unitario con `box_size = 1` y `stock = 0` dentro de la misma transaccion.
 
 #### Actualizacion manual
 - Cambiar `stock` genera movimiento manual de ajuste.

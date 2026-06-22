@@ -257,6 +257,7 @@ class InventoryService:
         *,
         warehouse_id: int,
         product_id: int,
+        commit: bool = True,
     ) -> None:
         existing_unitary_inventory = self.repository.get_by_keys(
             warehouse_id=warehouse_id,
@@ -266,7 +267,7 @@ class InventoryService:
         if existing_unitary_inventory is not None:
             if not existing_unitary_inventory.is_active:
                 existing_unitary_inventory.is_active = True
-                self.repository.update(existing_unitary_inventory, commit=True)
+                self.repository.update(existing_unitary_inventory, commit=commit)
             return
 
         unitary_inventory = Inventory(
@@ -281,7 +282,7 @@ class InventoryService:
         )
 
         try:
-            self.repository.add(unitary_inventory, commit=True)
+            self.repository.add(unitary_inventory, commit=commit)
         except IntegrityError:
             self.repository.db.rollback()
             return
@@ -417,7 +418,8 @@ class InventoryService:
     def create_inventory(self, payload: InventoryCreate) -> Inventory:
         self._get_product_or_404(payload.product_id)
         self._get_warehouse_or_404(payload.warehouse_id)
-        self._ensure_inventory_unique(
+
+        existing_inventory = self.repository.get_by_keys(
             warehouse_id=payload.warehouse_id,
             product_id=payload.product_id,
             box_size=payload.box_size,
@@ -425,6 +427,44 @@ class InventoryService:
 
         session = self.repository.db
         movement_repository = InventoryMovementRepository(session)
+
+        if existing_inventory is not None:
+            prev_stock = existing_inventory.stock
+            existing_inventory.stock = prev_stock + payload.stock
+            existing_inventory.is_active = True
+
+            try:
+                self.repository.update(existing_inventory, commit=False)
+                self._record_manual_stock_adjustment(
+                    inventory=existing_inventory,
+                    prev_stock=prev_stock,
+                    new_stock=existing_inventory.stock,
+                    movement_repository=movement_repository,
+                )
+                if payload.box_size > 1:
+                    self._ensure_unitary_placeholder(
+                        warehouse_id=payload.warehouse_id,
+                        product_id=payload.product_id,
+                        commit=False,
+                    )
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                self._raise_conflict(
+                    "Ya existe un inventario para este producto, almacén y tamaño de caja.",
+                    [
+                        {
+                            "field": "product_id",
+                            "message": "Ya existe un inventario para el almacén y tamaño de caja seleccionados.",
+                        }
+                    ],
+                )
+            except Exception:
+                session.rollback()
+                raise
+
+            return self._expanded_inventory(existing_inventory.id)
+
         inventory = Inventory(
             stock=payload.stock,
             reserved_stock=0,
@@ -440,12 +480,13 @@ class InventoryService:
             self.repository.add(inventory, commit=False)
             session.flush()
             self._record_manual_create(inventory, movement_repository)
-            session.commit()
             if payload.box_size > 1:
                 self._ensure_unitary_placeholder(
                     warehouse_id=payload.warehouse_id,
                     product_id=payload.product_id,
+                    commit=False,
                 )
+            session.commit()
         except IntegrityError:
             session.rollback()
             self._raise_conflict(
@@ -457,6 +498,9 @@ class InventoryService:
                     }
                 ],
             )
+        except Exception:
+            session.rollback()
+            raise
 
         return self._expanded_inventory(inventory.id)
 
@@ -527,12 +571,13 @@ class InventoryService:
             self.repository.add(inventory, commit=False)
             session.flush()
             self._record_manual_create(inventory, movement_repository)
-            session.commit()
             if payload.box_size > 1:
                 self._ensure_unitary_placeholder(
                     warehouse_id=payload.warehouse_id,
                     product_id=product.id,
+                    commit=False,
                 )
+            session.commit()
         except HTTPException:
             session.rollback()
             if uploaded_key:
