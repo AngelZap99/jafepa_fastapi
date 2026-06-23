@@ -453,6 +453,19 @@ Compatibilidad:
   - tipo de fuente
   - tipo de evento
   - tipo de movimiento
+  - persona inferida cuando hay auditoria disponible
+
+#### Indices de consulta
+- El historico de movimientos mantiene indices especificos para:
+  - listado activo ordenado por `movement_date`
+  - historial por `inventory_id`
+  - filtro directo por `inventory_movement.created_by`
+  - filtros por `source_type + movement_type + movement_date`
+  - filtro simple por `movement_type`
+- `inventory` mantiene un indice `product_id + warehouse_id` para los filtros por producto/almacen del historico.
+- `invoice` mantiene indices sobre `created_by` y `updated_by` para inferir y filtrar persona en movimientos de compra.
+- `sale` mantiene indices sobre `created_by`, `updated_by`, `paid_by` y `cancelled_by` para inferir y filtrar persona en movimientos de venta.
+- No se agregan indices a todas las columnas filtrables por defecto; se priorizan las rutas que pueden crecer mas o participar en joins del historico.
 
 #### Metricas de producto
 - El modulo de producto usa movimientos de salida para calcular:

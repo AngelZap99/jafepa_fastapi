@@ -159,6 +159,7 @@ class InventoryMovementFilters(BaseModel):
     inventory_id: Optional[int] = Field(default=None, gt=0)
     product_id: Optional[int] = Field(default=None, gt=0)
     warehouse_id: Optional[int] = Field(default=None, gt=0)
+    created_by: Optional[int] = Field(default=None, gt=0)
     invoice_id: Optional[int] = Field(default=None, gt=0)
     invoice_line_id: Optional[int] = Field(default=None, gt=0)
     sale_id: Optional[int] = Field(default=None, gt=0)
@@ -226,12 +227,24 @@ class InventoryMovementResponse(BaseModel):
     invoice_line_id: Optional[int]
     sale_line_id: Optional[int]
     is_active: bool
+    created_by: Optional[int] = None
+    updated_by: Optional[int] = None
+    actor_user_id: Optional[int] = None
+    actor_name: Optional[str] = None
+    actor_source: str = "unknown"
     created_at: UTCDateTime
     updated_at: UTCDateTime
 
     inventory: Optional[InventoryMovementInventoryRef] = None
     invoice_line: Optional[InventoryMovementInvoiceLineRef] = None
     sale_line: Optional[InventoryMovementSaleLineRef] = None
+
+
+class InventoryMovementListResponse(BaseModel):
+    items: list[InventoryMovementResponse]
+    total: int
+    skip: int
+    limit: Optional[int] = None
 
 
 class InventoryReservationSaleRef(BaseModel):

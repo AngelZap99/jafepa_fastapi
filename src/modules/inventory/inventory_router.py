@@ -8,7 +8,7 @@ from src.modules.inventory.inventory_schema import (
     InventoryUpdate,
     InventoryResponse,
     InventoryMovementFilters,
-    InventoryMovementResponse,
+    InventoryMovementListResponse,
 )
 
 from src.modules.inventory.domain.inventory_service import InventoryService
@@ -76,7 +76,7 @@ def list_inventory(
 
 @router.get(
     "/movements",
-    response_model=list[InventoryMovementResponse],
+    response_model=InventoryMovementListResponse,
     status_code=status.HTTP_200_OK,
 )
 def list_inventory_movements(
@@ -108,8 +108,9 @@ def get_inventory(
 def create_inventory(
     payload: InventoryCreate,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user=Depends(get_current_user),
 ):
-    return inventory_service.create_inventory(payload)
+    return inventory_service.create_inventory(payload, current_user=current_user)
 
 
 @router.post(
@@ -122,11 +123,13 @@ def create_inventory_with_product(
     payload: InventoryCreateWithProduct = Depends(InventoryCreateWithProduct.as_form),
     image_file: UploadFile | None = File(None),
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user=Depends(get_current_user),
 ):
     return inventory_service.create_inventory_with_product(
         payload,
         image=image_file,
         base_url=str(request.base_url),
+        current_user=current_user,
     )
 
 
@@ -139,8 +142,11 @@ def update_inventory(
     inventory_id: int,
     payload: InventoryUpdate,
     inventory_service: InventoryService = Depends(get_inventory_service),
+    current_user=Depends(get_current_user),
 ):
-    return inventory_service.update_inventory(inventory_id, payload)
+    return inventory_service.update_inventory(
+        inventory_id, payload, current_user=current_user
+    )
 
 
 @router.delete(

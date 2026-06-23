@@ -59,8 +59,9 @@ def get_invoice(
 def create_invoice(
     payload: InvoiceCreateWithLines,
     invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user=Depends(get_current_user),
 ):
-    return invoice_service.create_invoice(payload)
+    return invoice_service.create_invoice(payload, current_user=current_user)
 
 
 @router.put(
@@ -72,8 +73,9 @@ def update_invoice(
     invoice_id: int,
     payload: InvoiceUpdate,
     invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user=Depends(get_current_user),
 ):
-    return invoice_service.update_invoice(invoice_id, payload)
+    return invoice_service.update_invoice(invoice_id, payload, current_user=current_user)
 
 
 @router.put(
@@ -85,8 +87,11 @@ def update_invoice_status(
     invoice_id: int,
     payload: InvoiceUpdateStatus,
     invoice_service: InvoiceService = Depends(get_invoice_service),
+    current_user=Depends(get_current_user),
 ):
-    return invoice_service.update_invoice_status(invoice_id, payload)
+    return invoice_service.update_invoice_status(
+        invoice_id, payload, current_user=current_user
+    )
 
 
 @router.delete(

@@ -143,6 +143,14 @@ class SaleService:
         ).strip()
         return display_name or user.email
 
+    @staticmethod
+    def _sale_actor_id(sale: Sale, *preferred_fields: str) -> int | None:
+        for field in preferred_fields:
+            value = getattr(sale, field, None)
+            if value:
+                return value
+        return getattr(sale, "updated_by", None) or getattr(sale, "created_by", None)
+
     def _attach_sale_audit(self, sale: Sale) -> Sale:
         user_repo = UserRepository(self.repository.db)
         set_attr = object.__setattr__
@@ -486,6 +494,7 @@ class SaleService:
         movement_repository: InventoryMovementRepository,
         movement_group_id: str,
         movement_sequence: int,
+        actor_id: int | None = None,
     ) -> int:
         quantity = self._sale_line_inventory_quantity(line)
         inventory.reserved_stock = max(int(inventory.reserved_stock) - quantity, 0)
@@ -507,6 +516,8 @@ class SaleService:
                 new_stock=inventory.stock,
                 inventory_id=inventory.id,
                 sale_line_id=line.id,
+                created_by=actor_id,
+                updated_by=actor_id,
             ),
             commit=False,
         )
@@ -562,6 +573,7 @@ class SaleService:
         movement_repository: InventoryMovementRepository,
         movement_group_id: str,
         movement_sequence: int,
+        actor_id: int | None = None,
     ) -> tuple[Inventory, int]:
         unit_inventory = self._ensure_unit_inventory(source_inventory=source_inventory)
         if unit_inventory.stock >= requested_units:
@@ -607,6 +619,8 @@ class SaleService:
                 new_stock=source_inventory.stock,
                 inventory_id=source_inventory.id,
                 sale_line_id=line.id,
+                created_by=actor_id,
+                updated_by=actor_id,
             ),
             commit=False,
         )
@@ -625,6 +639,8 @@ class SaleService:
                 new_stock=unit_inventory.stock,
                 inventory_id=unit_inventory.id,
                 sale_line_id=line.id,
+                created_by=actor_id,
+                updated_by=actor_id,
             ),
             commit=False,
         )
@@ -650,6 +666,7 @@ class SaleService:
         movement_repository = InventoryMovementRepository(session)
         movement_group_id = str(sale.id)
         movement_sequence = movement_repository.get_next_sequence(movement_group_id)
+        actor_id = self._sale_actor_id(sale, "updated_by", "created_by")
 
         for line in sale.lines:
             if not line.is_active or line.reservation_applied:
@@ -702,6 +719,8 @@ class SaleService:
                     new_stock=reservation_inventory.stock,
                     inventory_id=reservation_inventory.id,
                     sale_line_id=line.id,
+                    created_by=actor_id,
+                    updated_by=actor_id,
                 ),
                 commit=False,
             )
@@ -716,6 +735,7 @@ class SaleService:
         movement_repository = InventoryMovementRepository(session)
         movement_group_id = str(sale.id)
         movement_sequence = movement_repository.get_next_sequence(movement_group_id)
+        actor_id = self._sale_actor_id(sale, "cancelled_by", "updated_by", "created_by")
 
         for line in sale.lines:
             if not line.is_active or not line.reservation_applied:
@@ -736,6 +756,7 @@ class SaleService:
                 movement_repository=movement_repository,
                 movement_group_id=movement_group_id,
                 movement_sequence=movement_sequence,
+                actor_id=actor_id,
             )
             inventory_repository.update(reservation_inventory, commit=False)
             session.add(line)
@@ -746,6 +767,7 @@ class SaleService:
         movement_repository = InventoryMovementRepository(session)
         movement_group_id = str(sale.id)
         movement_sequence = movement_repository.get_next_sequence(movement_group_id)
+        actor_id = self._sale_actor_id(sale, "paid_by", "updated_by", "created_by")
 
         for line in sale.lines:
             if not line.is_active or line.inventory_applied:
@@ -772,6 +794,7 @@ class SaleService:
                         movement_repository=movement_repository,
                         movement_group_id=movement_group_id,
                         movement_sequence=movement_sequence,
+                        actor_id=actor_id,
                     )
                 self._ensure_piece_stock_available(
                     source_inventory,
@@ -785,6 +808,7 @@ class SaleService:
                     movement_repository=movement_repository,
                     movement_group_id=movement_group_id,
                     movement_sequence=movement_sequence,
+                    actor_id=actor_id,
                 )
             elif line.reservation_applied:
                 movement_sequence = self._release_line_reservation(
@@ -793,6 +817,7 @@ class SaleService:
                     movement_repository=movement_repository,
                     movement_group_id=movement_group_id,
                     movement_sequence=movement_sequence,
+                    actor_id=actor_id,
                 )
 
             prev_stock = inventory.stock
@@ -822,6 +847,8 @@ class SaleService:
                     new_stock=new_stock,
                     inventory_id=inventory.id,
                     sale_line_id=line.id,
+                    created_by=actor_id,
+                    updated_by=actor_id,
                 ),
                 commit=False,
             )
@@ -836,6 +863,7 @@ class SaleService:
         movement_repository = InventoryMovementRepository(session)
         movement_group_id = str(sale.id)
         movement_sequence = movement_repository.get_next_sequence(movement_group_id)
+        actor_id = self._sale_actor_id(sale, "cancelled_by", "updated_by", "created_by")
 
         for line in sale.lines:
             if not line.is_active or not line.inventory_applied:
@@ -869,6 +897,8 @@ class SaleService:
                     new_stock=inventory.stock,
                     inventory_id=inventory.id,
                     sale_line_id=line.id,
+                    created_by=actor_id,
+                    updated_by=actor_id,
                 ),
                 commit=False,
             )
@@ -1043,26 +1073,27 @@ class SaleService:
                 new_status=new_status,
             )
 
+            if current_user is not None:
+                sale.updated_by = getattr(current_user, "id", None)
+
             if new_status == SaleStatus.PAID:
                 self._ensure_sale_can_be_paid(sale)
-                self._apply_sale_paid(sale)
                 sale.paid_by = getattr(current_user, "id", None)
                 sale.paid_at = utcnow()
+                self._apply_sale_paid(sale)
             elif new_status == SaleStatus.CANCELLED:
+                sale.cancelled_by = getattr(current_user, "id", None)
+                sale.cancelled_at = utcnow()
                 if previous_status == SaleStatus.DRAFT:
                     self._apply_sale_release(sale)
                 elif previous_status == SaleStatus.PAID:
                     self._apply_sale_unpaid(sale)
-                sale.cancelled_by = getattr(current_user, "id", None)
-                sale.cancelled_at = utcnow()
             elif new_status == SaleStatus.DRAFT:
                 if previous_status == SaleStatus.PAID:
                     self._apply_sale_unpaid(sale)
                 self._apply_sale_reserved(sale)
 
             sale.status = new_status
-            if current_user is not None:
-                sale.updated_by = getattr(current_user, "id", None)
             session.add(sale)
             self._recalculate_sale_total(sale)
             session.commit()

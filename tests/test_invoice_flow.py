@@ -337,7 +337,9 @@ def test_invoice_reversal_keeps_full_history_active_and_reapplies(auth_client, d
         params={"invoice_line_id": line_id},
     )
     assert movement_payload.status_code == 200, movement_payload.text
-    listed = movement_payload.json()
+    movement_list = movement_payload.json()
+    assert movement_list["total"] == 3
+    listed = movement_list["items"]
     assert len(listed) == 3
     assert all("unit_value" in item for item in listed)
     assert all("unit_cost" not in item for item in listed)

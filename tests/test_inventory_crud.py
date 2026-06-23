@@ -18,6 +18,7 @@ from src.shared.models.category.category_model import Category
 from src.shared.models.inventory.inventory_model import Inventory
 from src.shared.models.inventory_movement.inventory_movement_model import InventoryMovement
 from src.shared.models.product.product_model import Product
+from src.shared.models.user.user_model import User
 from src.shared.models.warehouse.warehouse_model import Warehouse
 from src.shared.files.local_file_storage import resolve_media_path
 
@@ -214,7 +215,11 @@ def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_n
 
     movements = auth_client.get("/api/inventory/movements")
     assert movements.status_code == 200, movements.text
-    movement = movements.json()[0]
+    movement_payload = movements.json()
+    assert movement_payload["total"] >= 1
+    assert movement_payload["skip"] == 0
+    assert movement_payload["limit"] is None
+    movement = movement_payload["items"][0]
     assert movement["movement_date"].endswith("+00:00")
     assert movement["created_at"].endswith("+00:00")
     assert movement["updated_at"].endswith("+00:00")
@@ -228,6 +233,82 @@ def test_inventory_datetimes_are_serialized_with_utc_offset_and_filters_accept_n
         params={"from_date": naive_from, "to_date": aware_to},
     )
     assert filtered.status_code == 200, filtered.text
+    assert "items" in filtered.json()
+
+
+def test_inventory_movements_expose_actor_and_filter_by_created_by(auth_client, db_session):
+    data = _seed_inventory_catalog(db_session)
+    user = db_session.exec(select(User).where(User.email == "tester@example.com")).first()
+    assert user is not None
+
+    product = Product(
+        name="Actor product",
+        code="INV-ACTOR-001",
+        description="Actor inventory product",
+        category_id=data["category"].id,
+        brand_id=data["brand"].id,
+        image=None,
+    )
+    db_session.add(product)
+    db_session.commit()
+    db_session.refresh(product)
+
+    created = auth_client.post(
+        "/api/inventory/create",
+        json={
+            "product_id": product.id,
+            "warehouse_id": data["warehouse"].id,
+            "stock": 3,
+            "box_size": 1,
+            "is_active": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    response = auth_client.get(
+        "/api/inventory/movements",
+        params={"created_by": user.id, "limit": 10},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["total"] == 1
+    movement = payload["items"][0]
+    assert movement["created_by"] == user.id
+    assert movement["actor_user_id"] == user.id
+    assert movement["actor_name"] == "Test User"
+    assert movement["actor_source"] == "movement"
+
+
+def test_inventory_movements_return_unknown_actor_for_legacy_records(auth_client, db_session):
+    data = _seed_inventory_catalog(db_session)
+    movement = InventoryMovement(
+        movement_group_id="legacy",
+        movement_sequence=1,
+        source_type=InventorySourceType.MANUAL,
+        event_type=InventoryEventType.MANUAL_CREATED,
+        movement_type=InventoryMovementType.IN_,
+        value_type=InventoryValueType.COST,
+        quantity=1,
+        unit_value=Decimal("0.00"),
+        prev_stock=0,
+        new_stock=1,
+        inventory_id=data["inventory"].id,
+    )
+    db_session.add(movement)
+    db_session.commit()
+    db_session.refresh(movement)
+
+    response = auth_client.get(
+        "/api/inventory/movements",
+        params={"inventory_id": data["inventory"].id},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["total"] == 1
+    item = payload["items"][0]
+    assert item["actor_user_id"] is None
+    assert item["actor_name"] is None
+    assert item["actor_source"] == "unknown"
 
 
 def test_inventory_create_returns_404_for_missing_product_or_warehouse(auth_client, db_session):

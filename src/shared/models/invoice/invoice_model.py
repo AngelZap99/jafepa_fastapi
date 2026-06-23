@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from sqlalchemy import Date, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Index, Relationship
 
 from src.shared.models.base_model import MyBaseModel
 from src.shared.enums.invoice_enums import InvoiceStatus
@@ -14,6 +14,8 @@ class Invoice(MyBaseModel, table=True):
     __tablename__ = "invoice"
     __table_args__ = (
         UniqueConstraint("invoice_number", "sequence", name="uq_invoice_sequence"),
+        Index("ix_invoice_created_by", "created_by"),
+        Index("ix_invoice_updated_by", "updated_by"),
     )
 
     invoice_number: str = Field(max_length=50, nullable=False)
