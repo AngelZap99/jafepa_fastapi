@@ -74,6 +74,33 @@ Este documento resume la logica implementada actualmente en:
 - `sale`: cabecera de venta.
 - `sale_line`: lineas de venta ligadas a un `inventory` concreto.
 
+### Dashboard
+- `GET /api/bff/system-summary` concentra el resumen operativo y comercial.
+- `days` controla el periodo corto de ventas pagadas, ingresos, ticket promedio,
+  cancelaciones y facturas arribadas.
+- `flow_months` controla el analisis de flujo y la tendencia mensual; el frontend
+  usa seis meses por defecto.
+- El flujo de producto solo considera ventas `PAID` y lineas activas.
+- Para comparar presentaciones, las cajas se convierten a piezas con
+  `quantity_units * box_size`; las ventas unitarias usan `quantity_units`.
+- Mayor y menor flujo incluyen hasta cinco productos activos. Los productos sin
+  ventas forman parte del menor flujo y se contabilizan por separado.
+- `GET /api/bff/product-flow` expone el analisis paginado de todos los productos:
+  - permite buscar por codigo o nombre
+  - ordena por ventas distintas, piezas normalizadas o indice mixto
+  - permite consultar mayor o menor movimiento
+  - conserva la posicion global de cada producto aunque exista una busqueda
+- El percentil de frecuencia es el porcentaje de productos con menos ventas
+  pagadas distintas; el percentil de volumen usa el mismo criterio con piezas.
+- El indice mixto pondera 50% el percentil de frecuencia y 50% el percentil de
+  volumen. Siempre se devuelven tambien los valores y posiciones originales.
+- La disponibilidad se calcula por producto sumando las presentaciones activas;
+  un placeholder unitario en cero no marca al producto como agotado si existe
+  otra presentacion con disponibilidad.
+- Las reservas inconsistentes son inventarios donde `reserved_stock > stock`.
+- El endpoint agrega la informacion en seis consultas en vez de ejecutar un
+  conteo independiente por cada indicador.
+
 ## Base compartida
 
 Todas las tablas heredan de `MyBaseModel`:

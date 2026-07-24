@@ -68,7 +68,7 @@ Todas las rutas usan el mismo shape de error a nivel runtime:
 | Líneas de Factura (`invoice-lines`) | 4 |
 | Inventario (`inventory`) | 8 |
 | Ventas (`sales`) | 11 |
-| BFF / Dashboard (`bff`) | 1 |
+| BFF / Dashboard (`bff`) | 2 |
 
 ## Autenticación
 
@@ -5634,6 +5634,7 @@ Sin body.
 | Nombre | En | Tipo | Requerido | Default | Descripción |
 |---|---|---|---|---|---|
 | `days` | `query` | `integer` | No | `14` | Window in days for recent ARRIVED invoices and PAID sales. |
+| `flow_months` | `query` | `integer` | No | `6` | Calendar months used for product flow and sales trend. |
 
 **Body**
 
@@ -5645,7 +5646,8 @@ Sin body.
 ```json
 {
   "query": {
-    "days": 14
+    "days": 30,
+    "flow_months": 6
   }
 }
 ```
@@ -5674,13 +5676,31 @@ Sin body.
   "invoices": {
     "pending": 1,
     "cancelled": 1,
-    "arrived_last_n_days": 14
+    "arrived_last_n_days": 14,
+    "cancelled_last_n_days": 1
   },
   "sales": {
     "pending": 1,
     "cancelled": 1,
-    "paid_last_n_days": 14
-  }
+    "paid_last_n_days": 14,
+    "cancelled_last_n_days": 1,
+    "revenue_last_n_days": "15400.00",
+    "average_ticket_last_n_days": "1100.00"
+  },
+  "inventory": {
+    "products_with_availability": 20,
+    "products_without_availability": 3,
+    "over_reserved_inventories": 0
+  },
+  "product_flow": {
+    "months": 6,
+    "from_date": "2026-02-01",
+    "to_date": "2026-07-24",
+    "products_without_sales": 4,
+    "top_products": [],
+    "low_products": []
+  },
+  "monthly_sales": []
 }
 ```
 
@@ -5691,6 +5711,61 @@ Sin body.
 - `409` conflicto de negocio / duplicados / transición inválida cuando aplica
 - `422` error de validación de parámetros, query o body
 - `500` error interno del servidor
+
+### GET `/api/bff/product-flow`
+
+- Descripción: análisis paginado de frecuencia y volumen por producto.
+- Auth: Sí
+
+**Query Params**
+
+| Nombre | Tipo | Default | Descripción |
+|---|---|---|---|
+| `months` | `integer` | `6` | Meses calendario analizados, de 1 a 12. |
+| `search` | `string` | `null` | Coincidencia parcial por código o nombre. |
+| `sort_by` | `sales`, `units`, `mixed` | `mixed` | Criterio de clasificación. |
+| `order` | `asc`, `desc` | `desc` | Menor o mayor movimiento. |
+| `skip` | `integer` | `0` | Registros omitidos. |
+| `limit` | `integer` | `10` | Tamaño de página, máximo 50. |
+
+Las cajas se normalizan a piezas usando el `box_size` capturado en la línea de
+venta. El índice mixto pondera 50% el percentil de ventas distintas y 50% el
+percentil de piezas. Las posiciones siempre se calculan contra todos los
+productos activos, incluso cuando se utiliza `search`.
+
+**Ejemplo de salida**
+
+```json
+{
+  "months": 6,
+  "from_date": "2026-02-01",
+  "to_date": "2026-07-24",
+  "search": "GALAXY",
+  "sort_by": "mixed",
+  "order": "desc",
+  "products_without_sales": 4,
+  "items": [
+    {
+      "product_id": 10,
+      "product_code": "GALAXY-063",
+      "product_name": "Encendedor Galaxy",
+      "units_sold": 420,
+      "sales_count": 15,
+      "total_amount": "16950.00",
+      "average_units_per_sale": "28.0",
+      "sales_rank": 2,
+      "units_rank": 4,
+      "mixed_rank": 3,
+      "frequency_percentile": "91.0",
+      "volume_percentile": "85.0",
+      "mixed_score": "88.0"
+    }
+  ],
+  "total": 1,
+  "skip": 0,
+  "limit": 10
+}
+```
 
 
 ## Referencia de Schemas

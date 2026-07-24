@@ -227,16 +227,30 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
 
 ### BFF (Dashboard / aggregations)
 
-- System summary: `GET /api/bff/system-summary?days=14`
+- System summary: `GET /api/bff/system-summary?days=30&flow_months=6`
   - Catalog counts: products, clients, warehouses, users, categories, subcategories, brands
+  - Inventory health:
+    - active products with and without current availability
+    - inventory records whose reserved stock exceeds physical stock
   - Invoices:
     - `pending`: all `DRAFT`
     - `cancelled`: all `CANCELLED`
     - `arrived_last_n_days`: only `ARRIVED` within the last `days` (uses `arrival_date` or falls back to `invoice_date`)
+    - `cancelled_last_n_days`: cancelled invoices dated within the last `days`
   - Sales:
     - `pending`: all `DRAFT`
     - `cancelled`: all `CANCELLED`
     - `paid_last_n_days`: only `PAID` within the last `days`
+    - revenue and average ticket for paid sales within the last `days`
+  - Product flow:
+    - highest and lowest movement products over the last `flow_months`
+    - box sales are normalized to pieces using the captured `box_size`
+    - monthly paid-sales amount, sale count and normalized pieces
+- Product analysis: `GET /api/bff/product-flow?months=6&sort_by=mixed&order=desc`
+  - supports search by product code or name
+  - sorts by distinct paid sales, normalized pieces, or a mixed 50/50 score
+  - returns global rank for sales, pieces, and mixed flow even when searching
+  - supports ascending/descending order and pagination
 
 ### Auth
 
