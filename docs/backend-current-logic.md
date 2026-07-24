@@ -247,13 +247,26 @@ Implicacion:
   - `BOX_OPENED_OUT`
   - `BOX_OPENED_IN`
 - Ajustes manuales:
-  - `MANUAL_ADD`
-  - `MANUAL_REMOVE`
+  - `MANUAL_CREATED`
+  - `MANUAL_STOCK_ADJUSTED`
 
 #### Politica de historicos
 - Nunca se desactivan movimientos por reversa.
 - Toda reversa agrega un contramovimiento.
 - El estado efectivo se determina por la ultima transicion relevante de cada linea.
+- `GET /api/inventory/movements` conserva y expone la bitacora tecnica completa.
+- `GET /api/inventory/history/{inventory_id}` expone el historial operativo simplificado:
+  - incluye la ultima `INVOICE_RECEIVED` efectiva de cada linea de factura
+  - incluye la ultima `SALE_APPROVED` efectiva de cada linea de venta
+  - incluye ajustes manuales que cambian el stock
+  - excluye apartados, liberaciones, reversiones y aperturas de caja
+  - devuelve entradas y salidas respetando rango de fechas y tipo de movimiento
+  - devuelve stock fisico, stock apartado y disponibilidad actuales
+  - devuelve cliente, responsable y referencia comercial cuando aplican
+- `GET /api/inventory/history/{inventory_id}/export` genera un archivo `.xlsx`:
+  - incluye todos los movimientos que coinciden con los filtros, no solo la pagina visible
+  - conserva el rango de fechas y tipo de movimiento del historial
+  - incluye resumen, cliente, responsable, valores y referencia comercial
 
 ### 4. Invoices
 

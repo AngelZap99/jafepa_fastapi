@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from typing import Optional
 from src.shared.database.dependencies import SessionDep
 
@@ -9,12 +9,16 @@ from src.modules.inventory.inventory_schema import (
     InventoryResponse,
     InventoryMovementFilters,
     InventoryMovementListResponse,
+    InventoryOperationalHistoryResponse,
 )
 
 from src.modules.inventory.domain.inventory_service import InventoryService
 from src.modules.inventory.domain.inventory_repository import InventoryRepository
+from src.modules.inventory.domain.inventory_history_xlsx import XLSX_CONTENT_TYPE
 
 from src.modules.auth.auth_dependencies import get_current_user
+from src.shared.enums.inventory_enums import InventoryMovementType
+from src.shared.schemas.datetime_types import UTCDateTime
 
 
 router = APIRouter(
@@ -86,6 +90,59 @@ def list_inventory_movements(
     inventory_service: InventoryService = Depends(get_inventory_service),
 ):
     return inventory_service.list_movements(filters=filters, skip=skip, limit=limit)
+
+
+@router.get(
+    "/history/{inventory_id}",
+    response_model=InventoryOperationalHistoryResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_inventory_operational_history(
+    inventory_id: int,
+    skip: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=25, ge=1, le=100),
+    movement_type: InventoryMovementType | None = Query(default=None),
+    from_date: UTCDateTime | None = Query(default=None),
+    to_date: UTCDateTime | None = Query(default=None),
+    inventory_service: InventoryService = Depends(get_inventory_service),
+):
+    return inventory_service.get_operational_history(
+        inventory_id=inventory_id,
+        skip=skip,
+        limit=limit,
+        movement_type=movement_type,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+
+@router.get(
+    "/history/{inventory_id}/export",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+)
+def export_inventory_operational_history(
+    inventory_id: int,
+    movement_type: InventoryMovementType | None = Query(default=None),
+    from_date: UTCDateTime | None = Query(default=None),
+    to_date: UTCDateTime | None = Query(default=None),
+    inventory_service: InventoryService = Depends(get_inventory_service),
+):
+    content = inventory_service.export_operational_history_xlsx(
+        inventory_id=inventory_id,
+        movement_type=movement_type,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    return Response(
+        content=content,
+        media_type=XLSX_CONTENT_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="historial-inventario-{inventory_id}.xlsx"'
+            )
+        },
+    )
 
 
 @router.get(

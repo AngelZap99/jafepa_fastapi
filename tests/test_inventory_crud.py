@@ -1,4 +1,6 @@
 from decimal import Decimal
+from io import BytesIO
+from zipfile import ZipFile
 
 import pytest
 from fastapi import HTTPException
@@ -145,6 +147,47 @@ def test_inventory_create_initializes_costs_and_registers_manual_movement(auth_c
     assert movement.quantity == 7
     assert movement.prev_stock == 0
     assert movement.new_stock == 7
+
+    history = auth_client.get(f"/api/inventory/history/{payload['id']}")
+    assert history.status_code == 200, history.text
+    history_payload = history.json()
+    assert history_payload["total"] == 1
+    assert history_payload["summary"]["entries"] == 7
+    assert history_payload["summary"]["available"] == 7
+    history_item = history_payload["items"][0]
+    assert history_item["operation_type"] == "ADJUSTMENT"
+    assert history_item["movement_type"] == "IN"
+    assert history_item["client_name"] is None
+    assert history_item["actor_name"] == "Test User"
+    assert history_item["reference_id"] is None
+
+    filtered_history = auth_client.get(
+        f"/api/inventory/history/{payload['id']}",
+        params={"movement_type": "OUT"},
+    )
+    assert filtered_history.status_code == 200, filtered_history.text
+    filtered_payload = filtered_history.json()
+    assert filtered_payload["total"] == 0
+    assert filtered_payload["summary"]["entries"] == 0
+    assert filtered_payload["summary"]["exits"] == 0
+
+    export = auth_client.get(
+        f"/api/inventory/history/{payload['id']}/export",
+        params={"movement_type": "IN"},
+    )
+    assert export.status_code == 200, export.text
+    assert export.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert export.headers["content-disposition"].endswith(
+        f'historial-inventario-{payload["id"]}.xlsx"'
+    )
+    with ZipFile(BytesIO(export.content)) as workbook:
+        assert "xl/workbook.xml" in workbook.namelist()
+        sheet = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    assert "Ajuste manual" in sheet
+    assert "Test User" in sheet
+    assert "Solo entradas" in sheet
 
 
 def test_inventory_create_with_zero_stock_does_not_register_movement(auth_client, db_session):

@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 from fastapi import Form
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
@@ -242,6 +242,39 @@ class InventoryMovementResponse(BaseModel):
 
 class InventoryMovementListResponse(BaseModel):
     items: list[InventoryMovementResponse]
+    total: int
+    skip: int
+    limit: Optional[int] = None
+
+
+class InventoryOperationalHistoryItem(BaseModel):
+    id: int
+    movement_date: UTCDateTime
+    operation_type: Literal["PURCHASE", "SALE", "ADJUSTMENT"]
+    movement_type: InventoryMovementType
+    quantity: int
+    client_name: Optional[str] = None
+    actor_name: Optional[str] = None
+    unit_value: Decimal
+    total_value: Decimal
+    reference_id: Optional[int] = None
+    reference_number: Optional[str] = None
+    reference_sequence: Optional[int] = None
+
+
+class InventoryOperationalHistorySummary(BaseModel):
+    entries: int
+    available: int
+    physical_stock: int
+    reserved_stock: int
+    exits: int
+
+
+class InventoryOperationalHistoryResponse(BaseModel):
+    inventory_id: int
+    box_size: int
+    summary: InventoryOperationalHistorySummary
+    items: list[InventoryOperationalHistoryItem]
     total: int
     skip: int
     limit: Optional[int] = None

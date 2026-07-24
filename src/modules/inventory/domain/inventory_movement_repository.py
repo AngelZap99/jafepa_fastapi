@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from src.shared.models.inventory_movement.inventory_movement_model import (
@@ -224,6 +226,170 @@ class InventoryMovementRepository:
         if limit is not None:
             q = q.limit(limit)
         return self.db.execute(q).scalars().all()
+
+    def _operational_conditions(
+        self,
+        *,
+        inventory_id: int,
+        movement_type=None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ):
+        latest_invoice_movement_ids = (
+            select(func.max(InventoryMovement.id))
+            .where(
+                InventoryMovement.is_active == True,  # noqa: E712
+                InventoryMovement.source_type == InventorySourceType.INVOICE,
+                InventoryMovement.invoice_line_id.is_not(None),
+            )
+            .group_by(InventoryMovement.invoice_line_id)
+        )
+        latest_sale_movement_ids = (
+            select(func.max(InventoryMovement.id))
+            .where(
+                InventoryMovement.is_active == True,  # noqa: E712
+                InventoryMovement.source_type == InventorySourceType.SALE,
+                InventoryMovement.sale_line_id.is_not(None),
+            )
+            .group_by(InventoryMovement.sale_line_id)
+        )
+
+        effective_external_movement = or_(
+            and_(
+                InventoryMovement.id.in_(latest_invoice_movement_ids),
+                InventoryMovement.event_type
+                == InventoryEventType.INVOICE_RECEIVED,
+            ),
+            and_(
+                InventoryMovement.id.in_(latest_sale_movement_ids),
+                InventoryMovement.event_type == InventoryEventType.SALE_APPROVED,
+            ),
+        )
+        effective_manual_movement = and_(
+            InventoryMovement.source_type == InventorySourceType.MANUAL,
+            InventoryMovement.event_type.in_(
+                [
+                    InventoryEventType.MANUAL_CREATED,
+                    InventoryEventType.MANUAL_STOCK_ADJUSTED,
+                ]
+            ),
+            InventoryMovement.prev_stock != InventoryMovement.new_stock,
+        )
+
+        conditions = [
+            InventoryMovement.is_active == True,  # noqa: E712
+            InventoryMovement.inventory_id == inventory_id,
+            or_(effective_external_movement, effective_manual_movement),
+        ]
+        if movement_type is not None:
+            conditions.append(InventoryMovement.movement_type == movement_type)
+        if from_date is not None:
+            conditions.append(InventoryMovement.movement_date >= from_date)
+        if to_date is not None:
+            conditions.append(InventoryMovement.movement_date <= to_date)
+        return conditions
+
+    def list_operational(
+        self,
+        *,
+        inventory_id: int,
+        skip: int = 0,
+        limit: int | None = None,
+        movement_type=None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> list[InventoryMovement]:
+        q = (
+            select(InventoryMovement)
+            .options(
+                selectinload(InventoryMovement.invoice_line).selectinload(
+                    InvoiceLine.invoice
+                ),
+                selectinload(InventoryMovement.sale_line)
+                .selectinload(SaleLine.sale)
+                .selectinload(Sale.client),
+            )
+            .where(
+                *self._operational_conditions(
+                    inventory_id=inventory_id,
+                    movement_type=movement_type,
+                    from_date=from_date,
+                    to_date=to_date,
+                )
+            )
+            .order_by(
+                InventoryMovement.movement_date.desc(),
+                InventoryMovement.id.desc(),
+            )
+            .offset(skip)
+        )
+        if limit is not None:
+            q = q.limit(limit)
+        return list(self.db.execute(q).scalars().all())
+
+    def count_operational(
+        self,
+        *,
+        inventory_id: int,
+        movement_type=None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> int:
+        q = select(func.count(InventoryMovement.id)).where(
+            *self._operational_conditions(
+                inventory_id=inventory_id,
+                movement_type=movement_type,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
+        return int(self.db.execute(q).scalar() or 0)
+
+    def operational_totals(
+        self,
+        *,
+        inventory_id: int,
+        movement_type=None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> tuple[int, int]:
+        q = select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            InventoryMovement.movement_type
+                            == InventoryMovementType.IN_,
+                            InventoryMovement.quantity,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            InventoryMovement.movement_type
+                            == InventoryMovementType.OUT,
+                            InventoryMovement.quantity,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ),
+        ).where(
+            *self._operational_conditions(
+                inventory_id=inventory_id,
+                movement_type=movement_type,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
+        entries, exits = self.db.execute(q).one()
+        return int(entries or 0), int(exits or 0)
 
     def _effective_line_movements_subquery(
         self,

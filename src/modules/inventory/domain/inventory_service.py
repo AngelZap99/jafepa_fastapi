@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from math import ceil
 from typing import List, Optional
@@ -13,12 +14,19 @@ from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
 from src.modules.inventory.domain.inventory_repository import InventoryRepository
+from src.modules.inventory.domain.inventory_history_xlsx import (
+    build_inventory_history_xlsx,
+    format_history_datetime,
+)
 from src.modules.inventory.inventory_schema import (
     InventoryCreate,
     InventoryCreateWithProduct,
     InventoryMovementFilters,
     InventoryMovementListResponse,
     InventoryMovementResponse,
+    InventoryOperationalHistoryItem,
+    InventoryOperationalHistoryResponse,
+    InventoryOperationalHistorySummary,
     InventoryUpdate,
 )
 from src.modules.product.domain.product_repository import ProductRepository
@@ -789,4 +797,196 @@ class InventoryService:
             total=total,
             skip=skip,
             limit=limit,
+        )
+
+    def get_operational_history(
+        self,
+        *,
+        inventory_id: int,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        movement_type: InventoryMovementType | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> InventoryOperationalHistoryResponse:
+        inventory = self._get_inventory_or_404(inventory_id)
+        movement_repository = InventoryMovementRepository(self.repository.db)
+        movements = movement_repository.list_operational(
+            inventory_id=inventory_id,
+            skip=skip,
+            limit=limit,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        total = movement_repository.count_operational(
+            inventory_id=inventory_id,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        entries, exits = movement_repository.operational_totals(
+            inventory_id=inventory_id,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        items: list[InventoryOperationalHistoryItem] = []
+        user_cache: dict[int, str | None] = {}
+        for movement in movements:
+            operation_type = "ADJUSTMENT"
+            client_name = None
+            reference_id = None
+            reference_number = None
+            reference_sequence = None
+
+            if movement.event_type == InventoryEventType.INVOICE_RECEIVED:
+                operation_type = "PURCHASE"
+                invoice = (
+                    movement.invoice_line.invoice if movement.invoice_line else None
+                )
+                if invoice is not None:
+                    reference_id = invoice.id
+                    reference_number = invoice.invoice_number
+                    reference_sequence = invoice.sequence
+            elif movement.event_type == InventoryEventType.SALE_APPROVED:
+                operation_type = "SALE"
+                sale = movement.sale_line.sale if movement.sale_line else None
+                if sale is not None:
+                    reference_id = sale.id
+                    client_name = sale.client.name if sale.client else None
+
+            actor_user_id, _ = self._movement_actor(movement)
+            items.append(
+                InventoryOperationalHistoryItem(
+                    id=movement.id,
+                    movement_date=movement.movement_date,
+                    operation_type=operation_type,
+                    movement_type=movement.movement_type,
+                    quantity=movement.quantity,
+                    client_name=client_name,
+                    actor_name=self._user_display_name(actor_user_id, user_cache),
+                    unit_value=movement.unit_value,
+                    total_value=movement.unit_value * Decimal(movement.quantity),
+                    reference_id=reference_id,
+                    reference_number=reference_number,
+                    reference_sequence=reference_sequence,
+                )
+            )
+
+        return InventoryOperationalHistoryResponse(
+            inventory_id=inventory.id,
+            box_size=inventory.box_size,
+            summary=InventoryOperationalHistorySummary(
+                entries=entries,
+                available=inventory.stock - inventory.reserved_stock,
+                physical_stock=inventory.stock,
+                reserved_stock=inventory.reserved_stock,
+                exits=exits,
+            ),
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+
+    def export_operational_history_xlsx(
+        self,
+        *,
+        inventory_id: int,
+        movement_type: InventoryMovementType | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> bytes:
+        inventory = self._get_inventory_or_404(inventory_id)
+        history = self.get_operational_history(
+            inventory_id=inventory_id,
+            skip=0,
+            limit=None,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        filter_parts: list[str] = []
+        if from_date and to_date:
+            filter_parts.append(
+                f"{from_date.strftime('%d/%m/%Y')} al {to_date.strftime('%d/%m/%Y')}"
+            )
+        elif from_date:
+            filter_parts.append(f"Desde {from_date.strftime('%d/%m/%Y')}")
+        elif to_date:
+            filter_parts.append(f"Hasta {to_date.strftime('%d/%m/%Y')}")
+        if movement_type is not None:
+            filter_parts.append(
+                "Solo entradas"
+                if movement_type == InventoryMovementType.IN_
+                else "Solo salidas"
+            )
+
+        rows = []
+        for item in history.items:
+            if item.operation_type == "SALE":
+                operation = (
+                    f"Venta #{item.reference_id}" if item.reference_id else "Venta"
+                )
+            elif item.operation_type == "PURCHASE":
+                if item.reference_number:
+                    sequence = (
+                        f"-{item.reference_sequence}"
+                        if item.reference_sequence
+                        else ""
+                    )
+                    operation = f"Factura {item.reference_number}{sequence}"
+                else:
+                    operation = (
+                        f"Factura #{item.reference_id}"
+                        if item.reference_id
+                        else "Factura"
+                    )
+            else:
+                operation = "Ajuste manual"
+
+            rows.append(
+                {
+                    "quantity": item.quantity,
+                    "operation": operation,
+                    "movement_type": (
+                        "Entrada"
+                        if item.movement_type == InventoryMovementType.IN_
+                        else "Salida"
+                    ),
+                    "client_name": item.client_name or "",
+                    "actor_name": item.actor_name or "",
+                    "unit_value": item.unit_value,
+                    "total_value": item.total_value,
+                    "movement_date": format_history_datetime(item.movement_date),
+                }
+            )
+
+        product = inventory.product
+        warehouse = inventory.warehouse
+        product_title = " - ".join(
+            value
+            for value in [
+                getattr(product, "code", None),
+                getattr(product, "name", None),
+            ]
+            if value
+        )
+        presentation = (
+            f"Caja de {inventory.box_size} piezas"
+            if inventory.box_size > 1
+            else "Pieza individual"
+        )
+        return build_inventory_history_xlsx(
+            title=product_title,
+            warehouse=getattr(warehouse, "name", "") or "",
+            presentation=presentation,
+            filter_description=" · ".join(filter_parts) or "Sin filtros",
+            entries=history.summary.entries,
+            exits=history.summary.exits,
+            available=history.summary.available,
+            rows=rows,
         )
