@@ -128,6 +128,70 @@ def test_sale_can_be_marked_paid_and_applies_inventory(auth_client, db_session):
     assert movements[-1].prev_stock == starting_stock
     assert movements[-1].new_stock == starting_stock - quantity
 
+    history = auth_client.get(f"/api/inventory/history/{inventory.id}")
+    assert history.status_code == 200, history.text
+    history_payload = history.json()
+    assert history_payload["total"] == 1
+    assert history_payload["summary"] == {
+        "entries": 0,
+        "available": starting_stock - quantity,
+        "physical_stock": starting_stock - quantity,
+        "reserved_stock": 0,
+        "exits": quantity,
+    }
+    history_item = history_payload["items"][0]
+    assert history_item["operation_type"] == "SALE"
+    assert history_item["movement_type"] == "OUT"
+    assert history_item["client_name"] == client_obj.name
+    assert history_item["reference_id"] == sale_id
+    assert Decimal(history_item["unit_value"]) == unit_price
+    assert Decimal(history_item["total_value"]) == unit_price * quantity
+
+
+def test_operational_history_excludes_reverted_sale(auth_client, db_session):
+    starting_stock = 8
+    inventory, client_obj = _seed_inventory_and_client(
+        db_session, stock=starting_stock
+    )
+
+    created = auth_client.post(
+        "/api/sales/create",
+        json={
+            "sale_date": date.today().isoformat(),
+            "status": "DRAFT",
+            "client_id": client_obj.id,
+            "lines": [
+                {
+                    "inventory_id": inventory.id,
+                    "quantity_units": 2,
+                    "price": "4.00",
+                }
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    sale_id = created.json()["id"]
+
+    paid = auth_client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "PAID"},
+    )
+    assert paid.status_code == 200, paid.text
+
+    cancelled = auth_client.put(
+        f"/api/sales/update-status/{sale_id}",
+        json={"status": "CANCELLED"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+
+    history = auth_client.get(f"/api/inventory/history/{inventory.id}")
+    assert history.status_code == 200, history.text
+    history_payload = history.json()
+    assert history_payload["total"] == 0
+    assert history_payload["items"] == []
+    assert history_payload["summary"]["exits"] == 0
+    assert history_payload["summary"]["available"] == starting_stock
+
 
 def test_marking_sale_paid_twice_is_idempotent(auth_client, db_session):
     starting_stock = 5

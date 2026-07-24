@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from sqlalchemy import DateTime, Numeric
 from sqlalchemy.orm import Mapped
-from sqlmodel import Field, Relationship, UniqueConstraint
+from sqlmodel import Field, Index, Relationship, UniqueConstraint
 
 from src.shared.models.base_model import MyBaseModel
 from src.shared.enums.inventory_enums import (
@@ -23,6 +23,30 @@ class InventoryMovement(MyBaseModel, table=True):
         UniqueConstraint(
             "movement_group_id", "movement_sequence", name="uq_inv_mov_group_seq"
         ),
+        Index(
+            "ix_inventory_movement_active_date_id",
+            "is_active",
+            "movement_date",
+            "id",
+        ),
+        Index(
+            "ix_inventory_movement_inventory_date_id",
+            "inventory_id",
+            "movement_date",
+            "id",
+        ),
+        Index(
+            "ix_inventory_movement_created_by_date_id",
+            "created_by",
+            "movement_date",
+            "id",
+        ),
+        Index(
+            "ix_inventory_movement_source_movement_date",
+            "source_type",
+            "movement_type",
+            "movement_date",
+        ),
     )
 
     movement_date: datetime = Field(
@@ -38,7 +62,7 @@ class InventoryMovement(MyBaseModel, table=True):
 
     source_type: InventorySourceType = Field(nullable=False, index=True)
     event_type: InventoryEventType = Field(nullable=False, index=True)
-    movement_type: InventoryMovementType = Field(nullable=False)
+    movement_type: InventoryMovementType = Field(nullable=False, index=True)
     value_type: InventoryValueType = Field(nullable=False, index=True)
 
     quantity: int = Field(nullable=False, gt=0)

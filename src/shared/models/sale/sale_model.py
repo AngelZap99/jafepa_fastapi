@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from sqlalchemy import Date, DateTime, Numeric
 from sqlalchemy.orm import Mapped
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Index, Relationship
 
 from src.shared.models.base_model import MyBaseModel
 from src.shared.enums.sale_enums import SaleStatus
@@ -13,6 +13,12 @@ from src.shared.enums.sale_enums import SaleStatus
 
 class Sale(MyBaseModel, table=True):
     __tablename__ = "sale"
+    __table_args__ = (
+        Index("ix_sale_created_by", "created_by"),
+        Index("ix_sale_updated_by", "updated_by"),
+        Index("ix_sale_paid_by", "paid_by"),
+        Index("ix_sale_cancelled_by", "cancelled_by"),
+    )
 
     sale_date: date = Field(default_factory=date.today, sa_type=Date, nullable=False)
     status: SaleStatus = Field(default=SaleStatus.DRAFT, nullable=False)

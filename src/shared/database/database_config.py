@@ -1,4 +1,5 @@
 import os
+import re
 from fastapi import HTTPException
 from sqlmodel import create_engine
 from sqlalchemy.engine import URL
@@ -20,6 +21,35 @@ def _env_flag(name: str, default: bool = False) -> bool:
 PY_ENV = os.getenv("PY_ENV") or os.getenv("PYENV", "development")
 SQL_ECHO = _env_flag("SQL_ECHO", default=False)
 IS_TESTING = _env_flag("TESTING") or PY_ENV.lower() == "test"
+PRODUCTION_MARKERS = {"prod", "production"}
+
+
+def _env_tokens(value: str | None) -> set[str]:
+    if value is None:
+        return set()
+    return {token for token in re.split(r"[^a-z0-9]+", value.lower()) if token}
+
+
+def _looks_like_production(value: str | None) -> bool:
+    return bool(_env_tokens(value) & PRODUCTION_MARKERS)
+
+
+def validate_database_target(py_env: str, db_host: str | None, db_name: str | None) -> None:
+    if py_env.lower() not in {"development", "dev", "local"}:
+        return
+
+    suspicious = []
+    if _looks_like_production(db_host):
+        suspicious.append(f"DB_HOST={db_host}")
+    if _looks_like_production(db_name):
+        suspicious.append(f"DB_NAME={db_name}")
+
+    if suspicious:
+        raise RuntimeError(
+            "Refusing to start in development with a production-like database "
+            f"target ({', '.join(suspicious)}). Use a local/dev database or set "
+            "PY_ENV=production only in the production runtime."
+        )
 
 if IS_TESTING:
     DATABASE_URL = "sqlite+pysqlite:///:memory:"
@@ -54,6 +84,7 @@ else:
     if missing_vars:
         raise RuntimeError(f"Missing environment variables: {', '.join(missing_vars)}")
 
+    validate_database_target(PY_ENV, HOST, NAME)
 
     # Build database URL (hides password in repr)
     DATABASE_URL = URL.create(

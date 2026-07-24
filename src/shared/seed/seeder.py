@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from src.shared.enums.invoice_enums import InvoiceStatus
-from src.shared.enums.sale_enums import SaleStatus
+from src.shared.enums.sale_enums import SaleLinePriceType, SaleStatus
 from src.shared.models.brand.brand_model import Brand
 from src.shared.models.category.category_model import Category
 from src.shared.models.client.client_model import Client
@@ -351,13 +351,24 @@ def seed_sales(*, session: Session, rng: random.Random, config: SeedConfig) -> N
             # Keep quantities small to reduce collisions across many sales
             qty = rng.randint(1, min(5, inv.stock))
             price = _coerce_decimal(rng.uniform(5, 150), places=2)
-            lines.append(
-                SaleLineCreate(
-                    inventory_id=inv.id,
-                    quantity_units=qty,
-                    price=price,
+            if int(inv.box_size or 1) > 1:
+                lines.append(
+                    SaleLineCreate(
+                        inventory_id=inv.id,
+                        quantity_boxes=qty,
+                        price=price,
+                        price_type=SaleLinePriceType.BOX,
+                    )
                 )
-            )
+            else:
+                lines.append(
+                    SaleLineCreate(
+                        inventory_id=inv.id,
+                        quantity_units=qty,
+                        price=price,
+                        price_type=SaleLinePriceType.UNIT,
+                    )
+                )
 
         if not lines:
             continue

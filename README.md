@@ -71,7 +71,11 @@ jafepa-fastapi/
 
 ## 5. Environment Variables
 
-- Copy the sample file: `cp .env.example .env`
+- Copy the sample file for each local target:
+  - Default/local file: `cp .env.example .env`
+  - Explicit local runtime file: `cp .env.example .env.local`
+- `.env`, `.env.local`, and `.env.*` are intentionally ignored by Git. Only `.env.example` should be versioned.
+- Production should inject variables through the server, container runtime, or CI/CD secret store; do not commit production secrets.
 - Required keys (validated in `src/shared/database/database_config.py`):
   - `DB_DIALECT`
   - `DB_DIALECT_DRIVER`
@@ -81,16 +85,26 @@ jafepa-fastapi/
   - `DB_USER`
   - `DB_PASSWORD`
 - Optional keys:
-  - `PYENV` (defaults to `development`; enables SQL logging in dev)
+  - `PY_ENV` / `PYENV` (defaults to `development`)
+  - `SQL_ECHO` (set to `true` for SQL logging)
+  - `LOG_LEVEL` (defaults to `INFO`)
   - `ALLOWED_CORS_ORIGINS` (comma-separated list; e.g. `http://localhost:3000,http://localhost:5173`)
+  - `MEDIA_ROOT`, `MEDIA_URL_PREFIX`, `MEDIA_PUBLIC_BASE_URL` / `PUBLIC_BASE_URL`
 - JWT/auth keys (used by `src/shared/config/env_config.py`):
   - `JWT_SECRET_KEY`
   - `JWT_ALGORITHM` (default `HS256`)
   - `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` (default `480`)
-  - `JWT_REFRESH_TOKEN_EXPIRE_DAYS` (default `1`)
+  - `JWT_REFRESH_TOKEN_EXPIRE_HOURS` (default `24`; `JWT_REFRESH_TOKEN_EXPIRE_DAYS` is still accepted as a legacy fallback)
   - `JWT_ENCRYPTION_KEY` (optional)
+- S3/image keys (only needed when using S3 storage):
+  - `AWS_REGION`
+  - `AWS_ACCESS_KEY_ID`
+  - `AWS_SECRET_ACCESS_KEY`
+  - `AWS_S3_BUCKET`
+  - `AWS_S3_BUCKET_URL`
 
 > Missing required variables raise `RuntimeError` at startup, ensuring misconfigurations are detected early.
+> When `PY_ENV=development`, startup refuses database targets whose host or database name look like production (for example, containing `prod` or `production`).
 
 ## 6. Installation
 
@@ -115,6 +129,20 @@ pip install -r requirements.txt
 # Start FastAPI with auto-reload
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+To run local code explicitly with `.env.local`:
+
+```bash
+source .venv/bin/activate
+
+set -a
+source .env.local
+set +a
+
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+For this mode, set `DB_HOST=localhost` or `DB_HOST=127.0.0.1` when Postgres is published on the host.
 
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
@@ -199,16 +227,30 @@ All module routes are mounted under the `/api` prefix in `main.py` (example: `GE
 
 ### BFF (Dashboard / aggregations)
 
-- System summary: `GET /api/bff/system-summary?days=14`
+- System summary: `GET /api/bff/system-summary?days=30&flow_months=6`
   - Catalog counts: products, clients, warehouses, users, categories, subcategories, brands
+  - Inventory health:
+    - active products with and without current availability
+    - inventory records whose reserved stock exceeds physical stock
   - Invoices:
     - `pending`: all `DRAFT`
     - `cancelled`: all `CANCELLED`
     - `arrived_last_n_days`: only `ARRIVED` within the last `days` (uses `arrival_date` or falls back to `invoice_date`)
+    - `cancelled_last_n_days`: cancelled invoices dated within the last `days`
   - Sales:
     - `pending`: all `DRAFT`
     - `cancelled`: all `CANCELLED`
     - `paid_last_n_days`: only `PAID` within the last `days`
+    - revenue and average ticket for paid sales within the last `days`
+  - Product flow:
+    - highest and lowest movement products over the last `flow_months`
+    - box sales are normalized to pieces using the captured `box_size`
+    - monthly paid-sales amount, sale count and normalized pieces
+- Product analysis: `GET /api/bff/product-flow?months=6&sort_by=mixed&order=desc`
+  - supports search by product code or name
+  - sorts by distinct paid sales, normalized pieces, or a mixed 50/50 score
+  - returns global rank for sales, pieces, and mixed flow even when searching
+  - supports ascending/descending order and pagination
 
 ### Auth
 

@@ -256,6 +256,21 @@ def test_arrived_invoice_registers_cost_movements(auth_client, db_session, catal
     assert movement.value_type == InventoryValueType.COST
     assert movement.unit_value == Decimal("25.00")
 
+    history = auth_client.get(f"/api/inventory/history/{movement.inventory_id}")
+    assert history.status_code == 200, history.text
+    history_payload = history.json()
+    assert history_payload["total"] == 1
+    assert history_payload["summary"]["entries"] == movement.quantity
+    assert history_payload["summary"]["exits"] == 0
+    history_item = history_payload["items"][0]
+    assert history_item["operation_type"] == "PURCHASE"
+    assert history_item["movement_type"] == "IN"
+    assert history_item["client_name"] is None
+    assert history_item["reference_id"] == invoice["id"]
+    assert history_item["reference_number"] == "INV-0003"
+    assert history_item["reference_sequence"] == 3
+    assert Decimal(history_item["unit_value"]) == Decimal("25.00")
+
 
 def test_invoice_reversal_keeps_full_history_active_and_reapplies(auth_client, db_session, catalog_seed):
     from src.shared.models.category.category_model import Category
@@ -337,7 +352,9 @@ def test_invoice_reversal_keeps_full_history_active_and_reapplies(auth_client, d
         params={"invoice_line_id": line_id},
     )
     assert movement_payload.status_code == 200, movement_payload.text
-    listed = movement_payload.json()
+    movement_list = movement_payload.json()
+    assert movement_list["total"] == 3
+    listed = movement_list["items"]
     assert len(listed) == 3
     assert all("unit_value" in item for item in listed)
     assert all("unit_cost" not in item for item in listed)

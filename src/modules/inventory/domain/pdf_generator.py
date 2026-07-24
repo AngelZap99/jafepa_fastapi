@@ -9,8 +9,6 @@ from html import escape
 from src.shared.files.local_file_storage import resolve_media_path
 
 
-SALE_TAX_PERCENT = Decimal("16")
-SALE_TAX_RATE = SALE_TAX_PERCENT / Decimal("100")
 MONEY_QUANTIZER = Decimal("0.01")
 
 
@@ -25,6 +23,10 @@ def _money(value):
     if value is None:
         return Decimal("0.00")
     return Decimal(str(value)).quantize(MONEY_QUANTIZER, rounding=ROUND_HALF_UP)
+
+
+def _enum_value(value):
+    return getattr(value, "value", value)
 
 class PDFGenerator:
 
@@ -176,14 +178,20 @@ class PDFGenerator:
 
             product_name = getattr(line, "product_name", None) or "Producto"
             product_code = getattr(line, "product_code", None) or "N/A"
-            quantity_boxes = int(
-                getattr(line, "quantity_boxes", None)
-                or getattr(line, "quantity_units", 0)
-            )
             box_size = int(getattr(line, "box_size", None) or 1)
-            quantity_units = quantity_boxes * box_size
-            pieces_label = "Unitario" if box_size == 1 else f"{box_size} Piezas/Caja"
-            price_value = getattr(line, "unit_price", None) or line.price
+            quantity_mode = _enum_value(getattr(line, "quantity_mode", None))
+            if quantity_mode == "UNIT":
+                quantity_boxes = "-"
+                quantity_units = int(getattr(line, "quantity_units", 0) or 0)
+                pieces_label = "Venta unitaria"
+            else:
+                quantity_boxes = int(
+                    getattr(line, "quantity_boxes", None)
+                    or getattr(line, "quantity_units", 0)
+                )
+                quantity_units = quantity_boxes * box_size
+                pieces_label = "Unitario" if box_size == 1 else f"{box_size} Piezas/Caja"
+            price_value = _money(getattr(line, "unit_price", None) or line.price)
             line_total = _money(getattr(line, "total_price", None))
             subtotal_amount += line_total
 
@@ -201,8 +209,7 @@ class PDFGenerator:
 
         client_name = sale.client.name if sale.client else "Público en General"
         attended_by = delivered_by_name or "Pendiente"
-        tax_amount = _money(subtotal_amount * SALE_TAX_RATE)
-        total_amount = _money(subtotal_amount + tax_amount)
+        total_amount = _money(subtotal_amount)
 
         invoice_html = f"""
         <div class="page">
@@ -242,14 +249,6 @@ class PDFGenerator:
                     <div>POR SU ATENCIÓN GRACIAS.</div>
                 </div>
                 <div class="invoice-summary">
-                    <div class="summary-row">
-                        <span>Subtotal:</span>
-                        <span>${subtotal_amount:,.2f}</span>
-                    </div>
-                    <div class="summary-row">
-                        <span>Impuesto ({SALE_TAX_PERCENT:.0f}%):</span>
-                        <span>${tax_amount:,.2f}</span>
-                    </div>
                     <div class="summary-row total">
                         <span>Total:</span>
                         <span>${total_amount:,.2f}</span>

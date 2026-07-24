@@ -3,7 +3,7 @@ from typing import Optional
 
 from sqlalchemy import Numeric
 from sqlalchemy.orm import Mapped
-from sqlmodel import Field, Relationship, UniqueConstraint
+from sqlmodel import Field, Index, Relationship, UniqueConstraint
 
 from src.shared.models.base_model import MyBaseModel
 
@@ -14,6 +14,7 @@ class Inventory(MyBaseModel, table=True):
         UniqueConstraint(
             "warehouse_id", "product_id", "box_size", name="uq_inventory_wh_product"
         ),
+        Index("ix_inventory_product_warehouse", "product_id", "warehouse_id"),
     )
 
     stock: int = Field(nullable=False)

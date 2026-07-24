@@ -347,6 +347,8 @@ class InvoiceService:
                 new_stock=new_stock,
                 inventory_id=inventory.id,
                 invoice_line_id=line.id,
+                created_by=invoice.updated_by or invoice.created_by,
+                updated_by=invoice.updated_by or invoice.created_by,
             )
 
             inventory_repository.update(inventory, commit=False)
@@ -403,6 +405,8 @@ class InvoiceService:
                 new_stock=new_stock,
                 inventory_id=inventory.id,
                 invoice_line_id=line.id,
+                created_by=invoice.updated_by or invoice.created_by,
+                updated_by=invoice.updated_by or invoice.created_by,
             )
 
             line.inventory_applied = False
@@ -432,7 +436,8 @@ class InvoiceService:
     def get_invoice(self, invoice_id: int):
         return self._get_invoice_or_404(invoice_id)
 
-    def create_invoice(self, payload: InvoiceCreateWithLines) -> Invoice:
+    def create_invoice(self, payload: InvoiceCreateWithLines, current_user=None) -> Invoice:
+        actor_id = getattr(current_user, "id", None)
         if payload.status not in {InvoiceStatus.DRAFT, InvoiceStatus.ARRIVED}:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -453,6 +458,8 @@ class InvoiceService:
             approximate_profit_rate=payload.approximate_profit_rate,
             notes=payload.notes,
             warehouse_id=payload.warehouse_id,
+            created_by=actor_id,
+            updated_by=actor_id,
         )
 
         for l in payload.lines:
@@ -518,7 +525,9 @@ class InvoiceService:
         # Re-fetch with relationships eagerly loaded
         return self.repository.get(invoice.id, include_inactive=True)  # type: ignore[return-value]
 
-    def update_invoice(self, invoice_id: int, payload: InvoiceUpdate) -> Invoice:
+    def update_invoice(
+        self, invoice_id: int, payload: InvoiceUpdate, current_user=None
+    ) -> Invoice:
         invoice = self._get_invoice_or_404(invoice_id)
         self._ensure_invoice_editable(invoice)
         data = payload.model_dump(exclude_unset=True)
@@ -527,6 +536,8 @@ class InvoiceService:
 
         for field, value in data.items():
             setattr(invoice, field, value)
+        if current_user is not None:
+            invoice.updated_by = getattr(current_user, "id", None)
 
         try:
             self.repository.update(invoice)
@@ -551,7 +562,7 @@ class InvoiceService:
         return self._get_invoice_or_404(invoice_id)
 
     def update_invoice_status(
-        self, invoice_id: int, payload: InvoiceUpdateStatus
+        self, invoice_id: int, payload: InvoiceUpdateStatus, current_user=None
     ) -> Invoice:
         session = self.repository.db
         try:
@@ -575,11 +586,17 @@ class InvoiceService:
                 )
 
             if new_status == InvoiceStatus.ARRIVED:
+                if current_user is not None:
+                    invoice.updated_by = getattr(current_user, "id", None)
                 self._apply_invoice_received(invoice)
             elif previous_status == InvoiceStatus.ARRIVED:
+                if current_user is not None:
+                    invoice.updated_by = getattr(current_user, "id", None)
                 self._apply_invoice_unreceived(invoice)
 
             invoice.status = new_status
+            if current_user is not None:
+                invoice.updated_by = getattr(current_user, "id", None)
             session.add(invoice)
             session.commit()
         except IntegrityError as e:

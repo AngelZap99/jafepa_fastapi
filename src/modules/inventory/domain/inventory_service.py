@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from math import ceil
 from typing import List, Optional
@@ -13,13 +14,23 @@ from src.modules.inventory.domain.inventory_movement_repository import (
     InventoryMovementRepository,
 )
 from src.modules.inventory.domain.inventory_repository import InventoryRepository
+from src.modules.inventory.domain.inventory_history_xlsx import (
+    build_inventory_history_xlsx,
+    format_history_datetime,
+)
 from src.modules.inventory.inventory_schema import (
     InventoryCreate,
     InventoryCreateWithProduct,
     InventoryMovementFilters,
+    InventoryMovementListResponse,
+    InventoryMovementResponse,
+    InventoryOperationalHistoryItem,
+    InventoryOperationalHistoryResponse,
+    InventoryOperationalHistorySummary,
     InventoryUpdate,
 )
 from src.modules.product.domain.product_repository import ProductRepository
+from src.modules.users.domain.users_repository import UserRepository
 from src.shared.enums.inventory_enums import (
     InventoryEventType,
     InventoryMovementType,
@@ -192,6 +203,7 @@ class InventoryService:
         quantity: int,
         prev_stock: int,
         new_stock: int,
+        actor_id: int | None = None,
     ) -> InventoryMovement:
         return InventoryMovement(
             movement_group_id=str(uuid4()),
@@ -205,10 +217,15 @@ class InventoryService:
             prev_stock=prev_stock,
             new_stock=new_stock,
             inventory_id=inventory.id,
+            created_by=actor_id,
+            updated_by=actor_id,
         )
 
     def _record_manual_create(
-        self, inventory: Inventory, movement_repository: InventoryMovementRepository
+        self,
+        inventory: Inventory,
+        movement_repository: InventoryMovementRepository,
+        actor_id: int | None = None,
     ) -> None:
         if inventory.stock <= 0:
             return
@@ -220,6 +237,7 @@ class InventoryService:
                 quantity=inventory.stock,
                 prev_stock=0,
                 new_stock=inventory.stock,
+                actor_id=actor_id,
             ),
             commit=False,
         )
@@ -231,6 +249,7 @@ class InventoryService:
         prev_stock: int,
         new_stock: int,
         movement_repository: InventoryMovementRepository,
+        actor_id: int | None = None,
     ) -> None:
         delta = new_stock - prev_stock
         if delta == 0:
@@ -248,6 +267,7 @@ class InventoryService:
                 quantity=abs(delta),
                 prev_stock=prev_stock,
                 new_stock=new_stock,
+                actor_id=actor_id,
             ),
             commit=False,
         )
@@ -257,6 +277,7 @@ class InventoryService:
         *,
         warehouse_id: int,
         product_id: int,
+        commit: bool = True,
     ) -> None:
         existing_unitary_inventory = self.repository.get_by_keys(
             warehouse_id=warehouse_id,
@@ -266,7 +287,7 @@ class InventoryService:
         if existing_unitary_inventory is not None:
             if not existing_unitary_inventory.is_active:
                 existing_unitary_inventory.is_active = True
-                self.repository.update(existing_unitary_inventory, commit=True)
+                self.repository.update(existing_unitary_inventory, commit=commit)
             return
 
         unitary_inventory = Inventory(
@@ -281,7 +302,7 @@ class InventoryService:
         )
 
         try:
-            self.repository.add(unitary_inventory, commit=True)
+            self.repository.add(unitary_inventory, commit=commit)
         except IntegrityError:
             self.repository.db.rollback()
             return
@@ -414,10 +435,12 @@ class InventoryService:
     def get_inventory(self, inventory_id: int) -> Inventory:
         return self._attach_active_reservations(self._get_inventory_or_404(inventory_id))
 
-    def create_inventory(self, payload: InventoryCreate) -> Inventory:
+    def create_inventory(self, payload: InventoryCreate, current_user=None) -> Inventory:
+        actor_id = getattr(current_user, "id", None)
         self._get_product_or_404(payload.product_id)
         self._get_warehouse_or_404(payload.warehouse_id)
-        self._ensure_inventory_unique(
+
+        existing_inventory = self.repository.get_by_keys(
             warehouse_id=payload.warehouse_id,
             product_id=payload.product_id,
             box_size=payload.box_size,
@@ -425,6 +448,45 @@ class InventoryService:
 
         session = self.repository.db
         movement_repository = InventoryMovementRepository(session)
+
+        if existing_inventory is not None:
+            prev_stock = existing_inventory.stock
+            existing_inventory.stock = prev_stock + payload.stock
+            existing_inventory.is_active = True
+
+            try:
+                self.repository.update(existing_inventory, commit=False)
+                self._record_manual_stock_adjustment(
+                    inventory=existing_inventory,
+                    prev_stock=prev_stock,
+                    new_stock=existing_inventory.stock,
+                    movement_repository=movement_repository,
+                    actor_id=actor_id,
+                )
+                if payload.box_size > 1:
+                    self._ensure_unitary_placeholder(
+                        warehouse_id=payload.warehouse_id,
+                        product_id=payload.product_id,
+                        commit=False,
+                    )
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                self._raise_conflict(
+                    "Ya existe un inventario para este producto, almacén y tamaño de caja.",
+                    [
+                        {
+                            "field": "product_id",
+                            "message": "Ya existe un inventario para el almacén y tamaño de caja seleccionados.",
+                        }
+                    ],
+                )
+            except Exception:
+                session.rollback()
+                raise
+
+            return self._expanded_inventory(existing_inventory.id)
+
         inventory = Inventory(
             stock=payload.stock,
             reserved_stock=0,
@@ -439,13 +501,14 @@ class InventoryService:
         try:
             self.repository.add(inventory, commit=False)
             session.flush()
-            self._record_manual_create(inventory, movement_repository)
-            session.commit()
+            self._record_manual_create(inventory, movement_repository, actor_id=actor_id)
             if payload.box_size > 1:
                 self._ensure_unitary_placeholder(
                     warehouse_id=payload.warehouse_id,
                     product_id=payload.product_id,
+                    commit=False,
                 )
+            session.commit()
         except IntegrityError:
             session.rollback()
             self._raise_conflict(
@@ -457,6 +520,9 @@ class InventoryService:
                     }
                 ],
             )
+        except Exception:
+            session.rollback()
+            raise
 
         return self._expanded_inventory(inventory.id)
 
@@ -466,7 +532,9 @@ class InventoryService:
         image: UploadFile | None = None,
         *,
         base_url: str | None = None,
+        current_user=None,
     ) -> Inventory:
+        actor_id = getattr(current_user, "id", None)
         session = self.repository.db
         product_repository = ProductRepository(session)
         movement_repository = InventoryMovementRepository(session)
@@ -526,13 +594,14 @@ class InventoryService:
             )
             self.repository.add(inventory, commit=False)
             session.flush()
-            self._record_manual_create(inventory, movement_repository)
-            session.commit()
+            self._record_manual_create(inventory, movement_repository, actor_id=actor_id)
             if payload.box_size > 1:
                 self._ensure_unitary_placeholder(
                     warehouse_id=payload.warehouse_id,
                     product_id=product.id,
+                    commit=False,
                 )
+            session.commit()
         except HTTPException:
             session.rollback()
             if uploaded_key:
@@ -560,7 +629,10 @@ class InventoryService:
 
         return self._expanded_inventory(inventory.id)
 
-    def update_inventory(self, inventory_id: int, payload: InventoryUpdate) -> Inventory:
+    def update_inventory(
+        self, inventory_id: int, payload: InventoryUpdate, current_user=None
+    ) -> Inventory:
+        actor_id = getattr(current_user, "id", None)
         inventory = self._get_inventory_or_404(inventory_id)
         data = payload.model_dump(exclude_unset=True)
         prev_stock = inventory.stock
@@ -587,6 +659,7 @@ class InventoryService:
                 prev_stock=prev_stock,
                 new_stock=inventory.stock,
                 movement_repository=movement_repository,
+                actor_id=actor_id,
             )
             session.commit()
         except IntegrityError:
@@ -636,25 +709,284 @@ class InventoryService:
     ####################
     # Movement history
     ####################
+    def _movement_actor(self, movement: InventoryMovement) -> tuple[int | None, str]:
+        if movement.created_by:
+            return movement.created_by, "movement"
+
+        sale = movement.sale_line.sale if movement.sale_line else None
+        if sale is not None:
+            if movement.event_type == InventoryEventType.SALE_APPROVED:
+                return (
+                    sale.paid_by or sale.updated_by or sale.created_by,
+                    "sale",
+                )
+            if movement.event_type in {
+                InventoryEventType.SALE_REVERSED,
+                InventoryEventType.SALE_RELEASED,
+            }:
+                return (
+                    sale.cancelled_by or sale.updated_by or sale.created_by,
+                    "sale",
+                )
+            if movement.event_type == InventoryEventType.SALE_RESERVED:
+                return sale.updated_by or sale.created_by, "sale"
+            return sale.updated_by or sale.created_by, "sale"
+
+        invoice = movement.invoice_line.invoice if movement.invoice_line else None
+        if invoice is not None:
+            return invoice.updated_by or invoice.created_by, "invoice"
+
+        return None, "unknown"
+
+    def _user_display_name(self, user_id: int | None, cache: dict[int, str | None]) -> str | None:
+        if not user_id:
+            return None
+        if user_id not in cache:
+            user = UserRepository(self.repository.db).get(user_id)
+            cache[user_id] = (
+                f"{user.first_name} {user.last_name}".strip()
+                if user
+                else None
+            )
+        return cache[user_id]
+
+    def _movement_response(
+        self, movement: InventoryMovement, user_cache: dict[int, str | None]
+    ) -> InventoryMovementResponse:
+        actor_user_id, actor_source = self._movement_actor(movement)
+        actor_name = self._user_display_name(actor_user_id, user_cache)
+        payload = InventoryMovementResponse.model_validate(movement, from_attributes=True)
+        payload.actor_user_id = actor_user_id
+        payload.actor_name = actor_name
+        payload.actor_source = actor_source if actor_user_id else "unknown"
+        return payload
+
     def list_movements(
         self, filters: InventoryMovementFilters, skip: int = 0, limit: Optional[int] = None
-    ):
+    ) -> InventoryMovementListResponse:
         movement_repository = InventoryMovementRepository(self.repository.db)
-        return movement_repository.list(
+        filter_kwargs = {
+            "include_inactive": filters.include_inactive,
+            "inventory_id": filters.inventory_id,
+            "product_id": filters.product_id,
+            "warehouse_id": filters.warehouse_id,
+            "created_by": filters.created_by,
+            "invoice_id": filters.invoice_id,
+            "invoice_line_id": filters.invoice_line_id,
+            "sale_id": filters.sale_id,
+            "sale_line_id": filters.sale_line_id,
+            "source_type": filters.source_type,
+            "event_type": filters.event_type,
+            "movement_type": filters.movement_type,
+            "value_type": filters.value_type,
+            "from_date": filters.from_date,
+            "to_date": filters.to_date,
+        }
+        movements = movement_repository.list(
             skip=skip,
             limit=limit,
-            include_inactive=filters.include_inactive,
-            inventory_id=filters.inventory_id,
-            product_id=filters.product_id,
-            warehouse_id=filters.warehouse_id,
-            invoice_id=filters.invoice_id,
-            invoice_line_id=filters.invoice_line_id,
-            sale_id=filters.sale_id,
-            sale_line_id=filters.sale_line_id,
-            source_type=filters.source_type,
-            event_type=filters.event_type,
-            movement_type=filters.movement_type,
-            value_type=filters.value_type,
-            from_date=filters.from_date,
-            to_date=filters.to_date,
+            **filter_kwargs,
+        )
+        total = movement_repository.count(**filter_kwargs)
+        user_cache: dict[int, str | None] = {}
+        return InventoryMovementListResponse(
+            items=[
+                self._movement_response(movement, user_cache)
+                for movement in movements
+            ],
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+
+    def get_operational_history(
+        self,
+        *,
+        inventory_id: int,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        movement_type: InventoryMovementType | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> InventoryOperationalHistoryResponse:
+        inventory = self._get_inventory_or_404(inventory_id)
+        movement_repository = InventoryMovementRepository(self.repository.db)
+        movements = movement_repository.list_operational(
+            inventory_id=inventory_id,
+            skip=skip,
+            limit=limit,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        total = movement_repository.count_operational(
+            inventory_id=inventory_id,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        entries, exits = movement_repository.operational_totals(
+            inventory_id=inventory_id,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        items: list[InventoryOperationalHistoryItem] = []
+        user_cache: dict[int, str | None] = {}
+        for movement in movements:
+            operation_type = "ADJUSTMENT"
+            client_name = None
+            reference_id = None
+            reference_number = None
+            reference_sequence = None
+
+            if movement.event_type == InventoryEventType.INVOICE_RECEIVED:
+                operation_type = "PURCHASE"
+                invoice = (
+                    movement.invoice_line.invoice if movement.invoice_line else None
+                )
+                if invoice is not None:
+                    reference_id = invoice.id
+                    reference_number = invoice.invoice_number
+                    reference_sequence = invoice.sequence
+            elif movement.event_type == InventoryEventType.SALE_APPROVED:
+                operation_type = "SALE"
+                sale = movement.sale_line.sale if movement.sale_line else None
+                if sale is not None:
+                    reference_id = sale.id
+                    client_name = sale.client.name if sale.client else None
+
+            actor_user_id, _ = self._movement_actor(movement)
+            items.append(
+                InventoryOperationalHistoryItem(
+                    id=movement.id,
+                    movement_date=movement.movement_date,
+                    operation_type=operation_type,
+                    movement_type=movement.movement_type,
+                    quantity=movement.quantity,
+                    client_name=client_name,
+                    actor_name=self._user_display_name(actor_user_id, user_cache),
+                    unit_value=movement.unit_value,
+                    total_value=movement.unit_value * Decimal(movement.quantity),
+                    reference_id=reference_id,
+                    reference_number=reference_number,
+                    reference_sequence=reference_sequence,
+                )
+            )
+
+        return InventoryOperationalHistoryResponse(
+            inventory_id=inventory.id,
+            box_size=inventory.box_size,
+            summary=InventoryOperationalHistorySummary(
+                entries=entries,
+                available=inventory.stock - inventory.reserved_stock,
+                physical_stock=inventory.stock,
+                reserved_stock=inventory.reserved_stock,
+                exits=exits,
+            ),
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+        )
+
+    def export_operational_history_xlsx(
+        self,
+        *,
+        inventory_id: int,
+        movement_type: InventoryMovementType | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+    ) -> bytes:
+        inventory = self._get_inventory_or_404(inventory_id)
+        history = self.get_operational_history(
+            inventory_id=inventory_id,
+            skip=0,
+            limit=None,
+            movement_type=movement_type,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        filter_parts: list[str] = []
+        if from_date and to_date:
+            filter_parts.append(
+                f"{from_date.strftime('%d/%m/%Y')} al {to_date.strftime('%d/%m/%Y')}"
+            )
+        elif from_date:
+            filter_parts.append(f"Desde {from_date.strftime('%d/%m/%Y')}")
+        elif to_date:
+            filter_parts.append(f"Hasta {to_date.strftime('%d/%m/%Y')}")
+        if movement_type is not None:
+            filter_parts.append(
+                "Solo entradas"
+                if movement_type == InventoryMovementType.IN_
+                else "Solo salidas"
+            )
+
+        rows = []
+        for item in history.items:
+            if item.operation_type == "SALE":
+                operation = (
+                    f"Venta #{item.reference_id}" if item.reference_id else "Venta"
+                )
+            elif item.operation_type == "PURCHASE":
+                if item.reference_number:
+                    sequence = (
+                        f"-{item.reference_sequence}"
+                        if item.reference_sequence
+                        else ""
+                    )
+                    operation = f"Factura {item.reference_number}{sequence}"
+                else:
+                    operation = (
+                        f"Factura #{item.reference_id}"
+                        if item.reference_id
+                        else "Factura"
+                    )
+            else:
+                operation = "Ajuste manual"
+
+            rows.append(
+                {
+                    "quantity": item.quantity,
+                    "operation": operation,
+                    "movement_type": (
+                        "Entrada"
+                        if item.movement_type == InventoryMovementType.IN_
+                        else "Salida"
+                    ),
+                    "client_name": item.client_name or "",
+                    "actor_name": item.actor_name or "",
+                    "unit_value": item.unit_value,
+                    "total_value": item.total_value,
+                    "movement_date": format_history_datetime(item.movement_date),
+                }
+            )
+
+        product = inventory.product
+        warehouse = inventory.warehouse
+        product_title = " - ".join(
+            value
+            for value in [
+                getattr(product, "code", None),
+                getattr(product, "name", None),
+            ]
+            if value
+        )
+        presentation = (
+            f"Caja de {inventory.box_size} piezas"
+            if inventory.box_size > 1
+            else "Pieza individual"
+        )
+        return build_inventory_history_xlsx(
+            title=product_title,
+            warehouse=getattr(warehouse, "name", "") or "",
+            presentation=presentation,
+            filter_description=" · ".join(filter_parts) or "Sin filtros",
+            entries=history.summary.entries,
+            exits=history.summary.exits,
+            available=history.summary.available,
+            rows=rows,
         )

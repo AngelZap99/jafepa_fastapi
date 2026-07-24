@@ -74,6 +74,33 @@ Este documento resume la logica implementada actualmente en:
 - `sale`: cabecera de venta.
 - `sale_line`: lineas de venta ligadas a un `inventory` concreto.
 
+### Dashboard
+- `GET /api/bff/system-summary` concentra el resumen operativo y comercial.
+- `days` controla el periodo corto de ventas pagadas, ingresos, ticket promedio,
+  cancelaciones y facturas arribadas.
+- `flow_months` controla el analisis de flujo y la tendencia mensual; el frontend
+  usa seis meses por defecto.
+- El flujo de producto solo considera ventas `PAID` y lineas activas.
+- Para comparar presentaciones, las cajas se convierten a piezas con
+  `quantity_units * box_size`; las ventas unitarias usan `quantity_units`.
+- Mayor y menor flujo incluyen hasta cinco productos activos. Los productos sin
+  ventas forman parte del menor flujo y se contabilizan por separado.
+- `GET /api/bff/product-flow` expone el analisis paginado de todos los productos:
+  - permite buscar por codigo o nombre
+  - ordena por ventas distintas, piezas normalizadas o indice mixto
+  - permite consultar mayor o menor movimiento
+  - conserva la posicion global de cada producto aunque exista una busqueda
+- El percentil de frecuencia es el porcentaje de productos con menos ventas
+  pagadas distintas; el percentil de volumen usa el mismo criterio con piezas.
+- El indice mixto pondera 50% el percentil de frecuencia y 50% el percentil de
+  volumen. Siempre se devuelven tambien los valores y posiciones originales.
+- La disponibilidad se calcula por producto sumando las presentaciones activas;
+  un placeholder unitario en cero no marca al producto como agotado si existe
+  otra presentacion con disponibilidad.
+- Las reservas inconsistentes son inventarios donde `reserved_stock > stock`.
+- El endpoint agrega la informacion en seis consultas en vez de ejecutar un
+  conteo independiente por cada indicador.
+
 ## Base compartida
 
 Todas las tablas heredan de `MyBaseModel`:
@@ -184,7 +211,9 @@ Implicacion:
 
 #### Creacion manual
 - Crear inventario registra movimiento manual de entrada si `stock > 0`.
-- Si el inventario se crea con `box_size > 1`, el backend tambien crea o reactiva un placeholder unitario con `box_size = 1` y `stock = 0`.
+- Si ya existe un inventario para la misma combinacion `warehouse_id + product_id + box_size`, la creacion manual no devuelve conflicto: suma el `stock` enviado al inventario existente, lo reactiva con `is_active = True` y registra un movimiento manual de ajuste por la diferencia.
+- La suma manual de stock no recalcula `avg_cost` ni `last_cost`. Este flujo representa ingreso sin factura; los costos se mantienen como estaban.
+- Si el inventario se crea o actualiza por duplicado con `box_size > 1`, el backend tambien crea o reactiva un placeholder unitario con `box_size = 1` y `stock = 0` dentro de la misma transaccion.
 
 #### Actualizacion manual
 - Cambiar `stock` genera movimiento manual de ajuste.
@@ -245,13 +274,26 @@ Implicacion:
   - `BOX_OPENED_OUT`
   - `BOX_OPENED_IN`
 - Ajustes manuales:
-  - `MANUAL_ADD`
-  - `MANUAL_REMOVE`
+  - `MANUAL_CREATED`
+  - `MANUAL_STOCK_ADJUSTED`
 
 #### Politica de historicos
 - Nunca se desactivan movimientos por reversa.
 - Toda reversa agrega un contramovimiento.
 - El estado efectivo se determina por la ultima transicion relevante de cada linea.
+- `GET /api/inventory/movements` conserva y expone la bitacora tecnica completa.
+- `GET /api/inventory/history/{inventory_id}` expone el historial operativo simplificado:
+  - incluye la ultima `INVOICE_RECEIVED` efectiva de cada linea de factura
+  - incluye la ultima `SALE_APPROVED` efectiva de cada linea de venta
+  - incluye ajustes manuales que cambian el stock
+  - excluye apartados, liberaciones, reversiones y aperturas de caja
+  - devuelve entradas y salidas respetando rango de fechas y tipo de movimiento
+  - devuelve stock fisico, stock apartado y disponibilidad actuales
+  - devuelve cliente, responsable y referencia comercial cuando aplican
+- `GET /api/inventory/history/{inventory_id}/export` genera un archivo `.xlsx`:
+  - incluye todos los movimientos que coinciden con los filtros, no solo la pagina visible
+  - conserva el rango de fechas y tipo de movimiento del historial
+  - incluye resumen, cliente, responsable, valores y referencia comercial
 
 ### 4. Invoices
 
@@ -433,6 +475,8 @@ Compatibilidad:
 #### Responsable para PDF
 - El PDF usa `paid_by` si existe.
 - Si no existe `paid_by`, usa `updated_by` como fallback para "Atendido por".
+- La nota de venta en PDF no muestra subtotal ni IVA; solo imprime el total como suma de las lineas activas.
+- En el PDF, las lineas por pieza no se expanden como cajas; muestran cajas como `-` y piezas totales como `quantity_units`.
 
 ### 6. Historicos y reportes
 
@@ -449,6 +493,19 @@ Compatibilidad:
   - tipo de fuente
   - tipo de evento
   - tipo de movimiento
+  - persona inferida cuando hay auditoria disponible
+
+#### Indices de consulta
+- El historico de movimientos mantiene indices especificos para:
+  - listado activo ordenado por `movement_date`
+  - historial por `inventory_id`
+  - filtro directo por `inventory_movement.created_by`
+  - filtros por `source_type + movement_type + movement_date`
+  - filtro simple por `movement_type`
+- `inventory` mantiene un indice `product_id + warehouse_id` para los filtros por producto/almacen del historico.
+- `invoice` mantiene indices sobre `created_by` y `updated_by` para inferir y filtrar persona en movimientos de compra.
+- `sale` mantiene indices sobre `created_by`, `updated_by`, `paid_by` y `cancelled_by` para inferir y filtrar persona en movimientos de venta.
+- No se agregan indices a todas las columnas filtrables por defecto; se priorizan las rutas que pueden crecer mas o participar en joins del historico.
 
 #### Metricas de producto
 - El modulo de producto usa movimientos de salida para calcular:
@@ -547,3 +604,5 @@ Si el cambio modifica comportamiento, agregar ademas una nota breve al final con
 - 2026-04-17: ventas ahora permiten precio `0.00` en `DRAFT`, agregan auditoria `paid_by` / `cancelled_by`, y soportan venta por pieza con apertura automatica de caja.
 - 2026-04-17: facturas ahora pueden crear productos inline mediante `new_product`.
 - 2026-04-20: el almacenamiento de imagenes se movio de S3 a disco local; el backend ahora las sirve desde una URL publica local bajo `/api/media/...` sin cambiar el contrato `image` para frontend.
+- 2026-06-16: la nota de venta en PDF dejo de mostrar subtotal e IVA; el total impreso ahora coincide con la suma de lineas activas.
+- 2026-06-16: la nota de venta en PDF ahora distingue lineas por caja y por pieza; el seeder local genera ventas por caja cuando el inventario tiene `box_size > 1`.
